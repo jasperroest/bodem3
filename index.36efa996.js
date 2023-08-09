@@ -557,7 +557,7 @@ var highlightcolour = {
     opacity: 1,
     fillOpacity: 0.8
 };
-function highlightFeature(e) {
+function onmouseover(e) {
     var layer = e.target;
     layer.setStyle({
         fillColor: 'yellow'
@@ -581,11 +581,25 @@ function onEachFeature(feature, layer) {
     // layer.bindPopup("<h3>Second popup 😀</h3><br>Grab the lower right corner and reduce the width of the map.").on("click");
     layer.bindPopup(popup).on("click", fitBoundsPadding);
     layer.on({
-        // click: function() {
-        //   layer.bindPopup("" + feature.properties.veldID)
-        // },
-        mouseover: highlightFeature,
-        mouseout: resetHighlight
+        mouseover: function(e) {
+            this.setStyle({
+                fillColor: 'yellow'
+            });
+            // Create and open a tooltip with the fieldID
+            const tooltip = L.tooltip({
+                permanent: true,
+                direction: 'top',
+                className: 'tooltip'
+            }).setContent("Field ID: " + this.veldID);
+            this.bindTooltip(tooltip).openTooltip();
+        },
+        mouseout: function(e) {
+            this.setStyle({
+                fillColor: 'orange'
+            });
+            // Remove the tooltip on mouseout
+            this.unbindTooltip();
+        }
     });
 }
 var fieldboundaries = L.geoJSON(_boundariesJs.boundaries).addTo(map);
@@ -606,12 +620,12 @@ fieldpoints.eachLayer(function(layer) {
 });
 /*Legend specific*/ var legend = L.control({
     position: "bottomright"
-});
+}).addTo(map);
 // map.on("zoomend", function() {
 //   var zoomlevel = map.getZoom();
 //
-//   // Get the legend element
-//   var legendElement = document.querySelector(".legend");
+//   // Get the legend element by its ID
+//   var legendElement = document.getElementById("legend");
 //
 //   // Show or hide the legend based on the zoom level
 //   if (zoomlevel >= 8) {
