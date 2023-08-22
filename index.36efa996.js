@@ -465,6 +465,7 @@ var _geosearchCss = require("./node_modules/leaflet-geosearch/dist/geosearch.css
 var _leafletGeosearch = require("leaflet-geosearch");
 var _pointsJs = require("./points.js");
 var _boundariesJs = require("./boundaries.js");
+// import { totalcounts } from './totalcounts;
 const BRTA_ATTRIBUTION = 'Kaartgegevens: © <a href="http://www.cbs.nl">CBS</a>, <a href="http://www.kadaster.nl">Kadaster</a>, <a href="http://openstreetmap.org">OpenStreetMap</a><span class="printhide">-auteurs (<a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>).</span>';
 const LUFO_ATTRIBUTION = 'Kaartgegevens: © <a href="http://www.cbs.nl">CBS</a>, <a href="http://www.kadaster.nl">Kadaster</a>, <a href="http://openstreetmap.org">OpenStreetMap</a><span class="printhide">-auteurs (<a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>).</span>';
 const brtRegular = getWMTSLayer('standaard', BRTA_ATTRIBUTION);
@@ -472,6 +473,58 @@ const brtRegular = getWMTSLayer('standaard', BRTA_ATTRIBUTION);
 // const brtPastel = getWMTSLayer('pastel', BRTA_ATTRIBUTION)
 // const brtWater = getWMTSLayer('water', BRTA_ATTRIBUTION)
 const luchtfoto = getLuchtfoto(BRTA_ATTRIBUTION);
+function getWMTSLayer(layername, attribution) {
+    return L.tileLayer(`https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/${layername}/EPSG:28992/{z}/{x}/{y}.png`, {
+        WMTS: false,
+        attribution: attribution,
+        crossOrigin: true
+    });
+}
+function getLuchtfoto(attribution) {
+    return L.tileLayer(`https://service.pdok.nl/hwh/luchtfotorgb/wmts/v1_0/Actueel_orthoHR/EPSG:28992/{z}/{x}/{y}.jpeg`, {
+        WMTS: false,
+        attribution: attribution,
+        crossOrigin: true
+    });
+}
+var geojsonMarkerOptions = {
+    radius: 2,
+    fillColor: "#ff800",
+    color: "#000",
+    weight: 1,
+    opacity: 1,
+    fillOpacity: 1
+};
+var highlightcolour = {
+    radius: 2,
+    fillColor: "#ffff00",
+    color: "#000",
+    weight: 1,
+    opacity: 1,
+    fillOpacity: 1
+};
+var fieldboundaries = L.geoJSON(_boundariesJs.boundaries);
+var fieldpoints = L.geoJSON(_pointsJs.points, {
+    onEachFeature: onEachFeature,
+    pointToLayer: function(feature, latlng) {
+        return L.circleMarker(latlng, geojsonMarkerOptions);
+    }
+});
+// var totalcounts = L.geoJSON(points, {
+//   onEachFeature: onEachFeature,
+//   pointToLayer: function(feature, latlng) {
+//     return L.circleMarker(latlng, geojsonMarkerOptions)
+//   }
+// }).addTo(map)
+// Adjusting the marker options
+fieldpoints.eachLayer(function(layer) {
+    layer.options.radius = 10; // Modify the radius, for example
+    layer.setStyle({
+        radius: 8,
+        fillColor: 'red',
+        color: 'black'
+    });
+});
 // see "Nederlandse richtlijn tiling" https://www.geonovum.nl/uploads/standards/downloads/nederlandse_richtlijn_tiling_-_versie_1.1.pdf
 // Resolution (in pixels per meter) for each zoomlevel
 var res = [
@@ -490,20 +543,6 @@ var res = [
     0.84,
     0.42
 ];
-function getWMTSLayer(layername, attribution) {
-    return L.tileLayer(`https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/${layername}/EPSG:28992/{z}/{x}/{y}.png`, {
-        WMTS: false,
-        attribution: attribution,
-        crossOrigin: true
-    });
-}
-function getLuchtfoto(attribution) {
-    return L.tileLayer(`https://service.pdok.nl/hwh/luchtfotorgb/wmts/v1_0/Actueel_orthoHR/EPSG:28992/{z}/{x}/{y}.jpeg`, {
-        WMTS: false,
-        attribution: attribution,
-        crossOrigin: true
-    });
-}
 // Projection parameters for RD projection (EPSG:28992):
 const map = L.map('mapid', {
     continuousWorld: true,
@@ -523,7 +562,9 @@ const map = L.map('mapid', {
         ]) // eslint-disable-line no-undef
     }),
     layers: [
-        brtRegular
+        brtRegular,
+        fieldboundaries,
+        fieldpoints
     ],
     center: [
         52.176997,
@@ -541,22 +582,6 @@ var baseLayers = {
 };
 L.control.layers(baseLayers).addTo(map) // eslint-disable-line no-undef
 ;
-var geojsonMarkerOptions = {
-    radius: 5,
-    fillColor: "#ff7800",
-    color: "#000",
-    weight: 1,
-    opacity: 1,
-    fillOpacity: 0.8
-};
-var highlightcolour = {
-    radius: 5,
-    fillColor: "#ffff00",
-    color: "#000",
-    weight: 1,
-    opacity: 1,
-    fillOpacity: 0.8
-};
 function onmouseover(e) {
     var layer = e.target;
     layer.setStyle({
@@ -602,22 +627,6 @@ function onEachFeature(feature, layer) {
         }
     });
 }
-var fieldboundaries = L.geoJSON(_boundariesJs.boundaries).addTo(map);
-var fieldpoints = L.geoJSON(_pointsJs.points, {
-    onEachFeature: onEachFeature,
-    pointToLayer: function(feature, latlng) {
-        return L.circleMarker(latlng, geojsonMarkerOptions);
-    }
-}).addTo(map);
-// Adjusting the marker options
-fieldpoints.eachLayer(function(layer) {
-    layer.options.radius = 10; // Modify the radius, for example
-    layer.setStyle({
-        radius: 10,
-        fillColor: 'red',
-        color: 'black'
-    });
-});
 /*Legend specific*/ var legend = L.control({
     position: "bottomright"
 }).addTo(map);

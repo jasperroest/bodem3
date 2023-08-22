@@ -927,6 +927,28 @@ body {
     animation: rotation 2s infinite linear;
     fill: red;
 }
+
+@media (max-width: 700px) {
+    /* Adjust styles for screens with a max width of 700px */
+
+    .leaflet-control-zoom {
+        font-size: 16px;
+    }
+
+    .legend {
+        font-size: 16px;
+    }
+
+    .leaflet-popup-content {
+        font-size: 16px;
+        padding: 10px;
+    }
+
+    .leaflet-control-geosearch form input[type="text"] {
+        font-size: 14px;
+        padding: 8px;
+    }
+}
 /* global styling */
 .leaflet-control-geosearch *,
 .leaflet-control-geosearch *:before,
