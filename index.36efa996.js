@@ -462,19 +462,24 @@ var _proj4Leaflet = require("proj4leaflet");
 var _lControlLayersTreeCss = require("leaflet.control.layers.tree/L.Control.Layers.Tree.css");
 var _indexCss = require("./index.css");
 var _geosearchCss = require("./node_modules/leaflet-geosearch/dist/geosearch.css");
+var _geosearchCss1 = require("leaflet-geosearch/dist/geosearch.css"); // Import the CSS
 var _leafletGeosearch = require("leaflet-geosearch");
-var _pointsJs = require("./points.js");
-var _boundariesJs = require("./boundaries.js");
-// import { totalcounts } from './totalcounts;
 const BRTA_ATTRIBUTION = 'Kaartgegevens: © <a href="http://www.cbs.nl">CBS</a>, <a href="http://www.kadaster.nl">Kadaster</a>, <a href="http://openstreetmap.org">OpenStreetMap</a><span class="printhide">-auteurs (<a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>).</span>';
 const LUFO_ATTRIBUTION = 'Kaartgegevens: © <a href="http://www.cbs.nl">CBS</a>, <a href="http://www.kadaster.nl">Kadaster</a>, <a href="http://openstreetmap.org">OpenStreetMap</a><span class="printhide">-auteurs (<a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>).</span>';
-const brtRegular = getWMTSLayer('standaard', BRTA_ATTRIBUTION);
-// const brtGrijs = getWMTSLayer('grijs', BRTA_ATTRIBUTION)
-// const brtPastel = getWMTSLayer('pastel', BRTA_ATTRIBUTION)
-// const brtWater = getWMTSLayer('water', BRTA_ATTRIBUTION)
-const luchtfoto = getLuchtfoto(BRTA_ATTRIBUTION);
-function getWMTSLayer(layername, attribution) {
-    return L.tileLayer(`https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/${layername}/EPSG:28992/{z}/{x}/{y}.png`, {
+const brtRegular = getBaseLayer(BRTA_ATTRIBUTION);
+const luchtfoto = getLuchtfoto(LUFO_ATTRIBUTION);
+// URL for the WFS service
+const geoServerBaseUrl = "https://protoklipenklaar.webgis1.com/geoserver/bodem";
+const fieldPointsWfsUrl = geoServerBaseUrl + "/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=bodem%3Afield_centers&outputFormat=application%2Fjson";
+const fieldBoundariesWfsUrl = geoServerBaseUrl + "/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=bodem%3Afield_boundaries&outputFormat=application%2Fjson";
+// Define the style for the WFS layer
+const wfsStyle = {
+    color: "red",
+    weight: 2,
+    opacity: 1 // Line opacity
+};
+function getBaseLayer(attribution) {
+    return L.tileLayer(`https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/standaard/EPSG:28992/{z}/{x}/{y}.png`, {
         WMTS: false,
         attribution: attribution,
         crossOrigin: true
@@ -487,43 +492,68 @@ function getLuchtfoto(attribution) {
         crossOrigin: true
     });
 }
-var geojsonMarkerOptions = {
-    radius: 2,
-    fillColor: "#ff800",
-    color: "#000",
-    weight: 1,
-    opacity: 1,
-    fillOpacity: 1
-};
-var highlightcolour = {
-    radius: 2,
-    fillColor: "#ffff00",
-    color: "#000",
-    weight: 1,
-    opacity: 1,
-    fillOpacity: 1
-};
-var fieldboundaries = L.geoJSON(_boundariesJs.boundaries);
-var fieldpoints = L.geoJSON(_pointsJs.points, {
-    onEachFeature: onEachFeature,
-    pointToLayer: function(feature, latlng) {
-        return L.circleMarker(latlng, geojsonMarkerOptions);
-    }
-});
-// var totalcounts = L.geoJSON(points, {
-//   onEachFeature: onEachFeature,
-//   pointToLayer: function(feature, latlng) {
-//     return L.circleMarker(latlng, geojsonMarkerOptions)
-//   }
-// }).addTo(map)
-// Adjusting the marker options
-fieldpoints.eachLayer(function(layer) {
-    layer.options.radius = 10; // Modify the radius, for example
-    layer.setStyle({
-        radius: 8,
-        fillColor: 'red',
-        color: 'black'
+var boundaries;
+// Retrieve WFS data and add it to the map
+fetch(fieldBoundariesWfsUrl).then((response)=>response.json()
+).then((data)=>{
+    // Create a Leaflet GeoJSON layer with the retrieved data and custom style
+    boundaries = L.geoJSON(data, {
+        style: wfsStyle // Apply the defined style to the layer
     });
+    // Set the minimum zoom for the boundaries layer
+    boundaries.options.minZoom = 10;
+}).catch((error)=>{
+    console.error("Error fetching WFS data:", error);
+});
+let points;
+// // Retrieve WFS data and add it to the map
+// fetch(fieldPointsWfsUrl)
+//     .then(response => response.json())
+//     .then(data => {
+//       // Create a Leaflet GeoJSON layer with the retrieved data and custom style
+//       points = L.geoJSON(data, {
+//         style: wfsStyle   // Apply the defined style to the layer
+//       });
+//
+//       // Set the minimum zoom for the boundaries layer
+//       boundaries.options.minZoom = 10;
+//
+//     })
+//     .catch(error => {
+//       console.error("Error fetching WFS data:", error);
+//     });
+let fieldpoints;
+// Inside the fetch for fieldPointsWfsUrl
+fetch(fieldPointsWfsUrl).then((response)=>response.json()
+).then((data)=>{
+    // Create a Leaflet GeoJSON layer with the retrieved data and custom style
+    const geojsonMarkerOptions = {
+        radius: 2,
+        fillColor: "#ff800",
+        color: "#000",
+        weight: 1,
+        opacity: 1,
+        fillOpacity: 1
+    };
+    fieldpoints = L.geoJSON(data, {
+        onEachFeature: onEachFeature,
+        pointToLayer: function(feature, latlng) {
+            return L.circleMarker(latlng, geojsonMarkerOptions);
+        }
+    });
+    // Adjusting the marker options
+    fieldpoints.eachLayer(function(layer) {
+        layer.options.radius = 10; // Modify the radius, for example
+        layer.setStyle({
+            radius: 8,
+            fillColor: 'red',
+            color: 'black'
+        });
+    });
+    // Add the fieldpoints layer to the map
+    fieldpoints.addTo(map);
+}).catch((error)=>{
+    console.error("Error fetching WFS data:", error);
 });
 // see "Nederlandse richtlijn tiling" https://www.geonovum.nl/uploads/standards/downloads/nederlandse_richtlijn_tiling_-_versie_1.1.pdf
 // Resolution (in pixels per meter) for each zoomlevel
@@ -562,9 +592,7 @@ const map = L.map('mapid', {
         ]) // eslint-disable-line no-undef
     }),
     layers: [
-        brtRegular,
-        fieldboundaries,
-        fieldpoints
+        brtRegular
     ],
     center: [
         52.176997,
@@ -582,6 +610,38 @@ var baseLayers = {
 };
 L.control.layers(baseLayers).addTo(map) // eslint-disable-line no-undef
 ;
+const provider = new _leafletGeosearch.OpenStreetMapProvider();
+const searchControl = new _leafletGeosearch.GeoSearchControl({
+    provider: provider,
+    showMarker: false,
+    showPopup: false,
+    marker: {
+        icon: L.icon({
+            iconUrl: 'path/to/your/icon.png',
+            iconSize: [
+                30,
+                30
+            ]
+        }),
+        draggable: false
+    }
+});
+map.addControl(searchControl);
+map.on('geosearch/showlocation', function(event) {
+    const latlng = event.location;
+    // You can now use the latlng to do further operations or set the map view
+    map.setView(latlng, 12); // Adjust the zoom level as needed
+});
+// Listen for the zoomend event on the map
+map.on("zoomend", function() {
+    const zoomLevel = map.getZoom();
+    // Check the current zoom level and adjust visibility of boundaries accordingly
+    if (zoomLevel < 10) map.removeLayer(boundaries); // Hide the layer
+    else {
+        map.addLayer(boundaries); // Show the layer
+        fieldpoints.bringToFront();
+    }
+});
 function onmouseover(e) {
     var layer = e.target;
     layer.setStyle({
@@ -591,7 +651,7 @@ function onmouseover(e) {
 function resetHighlight(e) {
     var layer = e.target;
     layer.setStyle({
-        fillColor: 'orange'
+        fillColor: 'red'
     });
 }
 var pane = map.createPane("fixed", document.getElementById("mapid"));
@@ -602,7 +662,7 @@ function onEachFeature(feature, layer) {
         pane: "fixed",
         className: "popup-fixed test",
         autoPan: false
-    }).setContent("<h3>Veld: " + feature.properties.veldID + "</h3>" + "<br>Grab the lower right corner and reduce the width of the map.");
+    }).setContent("<h3>Veld: " + feature.properties.veldID + "</h3>" + "<br>Grab the lower right corner and reduce the width of the map. <button>Button</button>");
     // layer.bindPopup("<h3>Second popup 😀</h3><br>Grab the lower right corner and reduce the width of the map.").on("click");
     layer.bindPopup(popup).on("click", fitBoundsPadding);
     layer.on({
@@ -620,7 +680,7 @@ function onEachFeature(feature, layer) {
         },
         mouseout: function(e) {
             this.setStyle({
-                fillColor: 'orange'
+                fillColor: 'red'
             });
             // Remove the tooltip on mouseout
             this.unbindTooltip();
@@ -629,7 +689,7 @@ function onEachFeature(feature, layer) {
 }
 /*Legend specific*/ var legend = L.control({
     position: "bottomright"
-}).addTo(map);
+});
 // map.on("zoomend", function() {
 //   var zoomlevel = map.getZoom();
 //
@@ -654,16 +714,13 @@ legend.onAdd = function(map1) {
     div.innerHTML += getColorBoxHTML('#E74C3C', '>500');
     return div;
 };
+// Add the legend control to the map
+legend.addTo(map);
 // Helper function to create HTML for color box
 function getColorBoxHTML(color, label) {
     return '<i style="background: ' + color + '"></i><span>' + label + '</span><br>';
 }
-const provider = new _leafletGeosearch.OpenStreetMapProvider();
 // L.tileLayer('//{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-const search = new _leafletGeosearch.GeoSearchControl({
-    provider: new _leafletGeosearch.OpenStreetMapProvider()
-});
-// map.addControl(search);
 const mediaQueryList = window.matchMedia("(min-width: 700px)");
 mediaQueryList.addEventListener("change", (event)=>onMediaQueryChange(event)
 );
@@ -672,350 +729,330 @@ function onMediaQueryChange(event) {
     if (event.matches) document.documentElement.style.setProperty("--min-width", "true");
     else document.documentElement.style.removeProperty("--min-width");
 }
-// // function fitBoundsPadding(e) {
-//   // removeAllAnimationClassFromMap();
-//   // // get with info div
-//   // const boxInfoWith = document.querySelector(
-//       ".leaflet-popup-content-wrapper"
-//   ).offsetWidth;
-//
-//   // add class to marker
-//   // e.target._icon.classList.add("animation");
-//
-//   // create a feature group, optionally given an initial set of layers
-//   const featureGroup = L.featureGroup([e.target]).addTo(map);
-//
-//   // check if attribute exist
-//   const getPropertyWidth =
-//       document.documentElement.style.getPropertyValue("--min-width");
-//
-//   // sets a map view that contains the given geographical bounds
-//   // with the maximum zoom level possible
-// //   map.fitBounds(featureGroup.getBounds(), {
-// //     paddingTopLeft: [getPropertyWidth ? -boxInfoWith : 0, 10],
-// //     maxZoom: 12,
-// //     animate: true,
-// //   });
-// // }
-// }
 function fitBoundsPadding(e) {
     const veldID = e.target.veldID; // Get the veldID from the clicked point
-    console.log(_boundariesJs.boundaries);
-    // Find the corresponding fieldboundaries feature based on the veldID
-    const correspondingBoundary = _boundariesJs.boundaries[0].features.find((feature)=>feature.properties.veldID === veldID
-    );
-    if (correspondingBoundary) {
-        // Calculate the center of the corresponding boundary feature
-        const bounds = L.geoJSON(correspondingBoundary).getBounds();
-        const center = bounds.getCenter();
-        // get width of info div
-        const boxInfoWidth = document.querySelector(".leaflet-popup-content-wrapper").offsetWidth;
-        // check if attribute exists
-        const getPropertyWidth = document.documentElement.style.getPropertyValue("--min-width");
-        // Center the map on the corresponding boundary feature
-        map.setView(center, 12, {
-            paddingTopLeft: [
-                getPropertyWidth ? -boxInfoWidth : 0,
-                40
-            ],
-            animate: true
-        });
-    }
+    if (boundaries) {
+        // Find the corresponding fieldboundaries feature based on the veldID
+        const correspondingBoundary = boundaries.toGeoJSON().features.find((feature)=>feature.properties.veldID === veldID
+        );
+        if (correspondingBoundary) {
+            // Calculate the center of the corresponding boundary feature
+            const bounds = L.geoJSON(correspondingBoundary).getBounds();
+            const center = bounds.getCenter();
+            // get width of info div
+            const boxInfoWidth = document.querySelector(".leaflet-popup-content-wrapper").offsetWidth;
+            // check if attribute exists
+            const getPropertyWidth = document.documentElement.style.getPropertyValue("--min-width");
+            // Center the map on the corresponding boundary feature
+            map.setView(center, 12, {
+                paddingTopLeft: [
+                    getPropertyWidth ? -boxInfoWidth : 0,
+                    40
+                ],
+                animate: true
+            });
+        }
+    } else console.error("boundaries is null");
 }
 
-},{"leaflet/dist/leaflet.css":"1JjJC","leaflet/dist/leaflet":"9HYFf","leaflet.control.layers.tree":"fZXae","proj4leaflet":"2TgW9","leaflet.control.layers.tree/L.Control.Layers.Tree.css":"fIMh4","./index.css":"fOUvf","./node_modules/leaflet-geosearch/dist/geosearch.css":"fRRd8","leaflet-geosearch":"7Vi3U","./points.js":"8hjmO","./boundaries.js":"20FpZ"}],"1JjJC":[function() {},{}],"9HYFf":[function(require,module,exports) {
+},{"leaflet/dist/leaflet.css":"1JjJC","leaflet/dist/leaflet":"9HYFf","leaflet.control.layers.tree":"fZXae","proj4leaflet":"2TgW9","leaflet.control.layers.tree/L.Control.Layers.Tree.css":"fIMh4","./index.css":"fOUvf","./node_modules/leaflet-geosearch/dist/geosearch.css":"fRRd8","leaflet-geosearch/dist/geosearch.css":"fRRd8","leaflet-geosearch":"7Vi3U"}],"1JjJC":[function() {},{}],"9HYFf":[function(require,module,exports) {
 /* @preserve
- * Leaflet 1.7.1, a JS library for interactive maps. http://leafletjs.com
- * (c) 2010-2019 Vladimir Agafonkin, (c) 2010-2011 CloudMade
- */ !function(t, i) {
-    "object" == typeof exports && "undefined" != typeof module ? i(exports) : "function" == typeof define && define.amd ? define([
+ * Leaflet 1.9.4, a JS library for interactive maps. https://leafletjs.com
+ * (c) 2010-2023 Vladimir Agafonkin, (c) 2010-2011 CloudMade
+ */ !function(t, e) {
+    "object" == typeof exports && "undefined" != typeof module ? e(exports) : "function" == typeof define && define.amd ? define([
         "exports"
-    ], i) : i(t.L = {
+    ], e) : e((t = "undefined" != typeof globalThis ? globalThis : t || self).leaflet = {
     });
 }(this, function(t) {
     "use strict";
-    function h(t1) {
-        for(var i, e, n = 1, o = arguments.length; n < o; n++)for(i in e = arguments[n])t1[i] = e[i];
+    function l(t1) {
+        for(var e, i, n = 1, o = arguments.length; n < o; n++)for(e in i = arguments[n])t1[e] = i[e];
         return t1;
     }
-    var s = Object.create || function(t1) {
-        return i.prototype = t1, new i;
+    var R = Object.create || function(t1) {
+        return N.prototype = t1, new N;
     };
-    function i() {
+    function N() {
     }
-    function p(t1, i1) {
-        var e = Array.prototype.slice;
-        if (t1.bind) return t1.bind.apply(t1, e.call(arguments, 1));
-        var n = e.call(arguments, 2);
-        return function() {
-            return t1.apply(i1, n.length ? n.concat(e.call(arguments)) : arguments);
-        };
+    function a2(t1, e) {
+        var i, n = Array.prototype.slice;
+        return t1.bind ? t1.bind.apply(t1, n.call(arguments, 1)) : (i = n.call(arguments, 2), function() {
+            return t1.apply(e, i.length ? i.concat(n.call(arguments)) : arguments);
+        });
     }
-    var e = 0;
-    function m(t1) {
-        return t1._leaflet_id = t1._leaflet_id || ++e, t1._leaflet_id;
+    var D = 0;
+    function h(t1) {
+        return "_leaflet_id" in t1 || (t1._leaflet_id = ++D), t1._leaflet_id;
     }
-    function n(t1, i1, e1) {
-        var n1, o, s1 = function() {
-            n1 = !1, o && (r.apply(e1, o), o = !1);
+    function j(t1, e, i) {
+        var n, o, s = function() {
+            n = !1, o && (r.apply(i, o), o = !1);
         }, r = function() {
-            n1 ? o = arguments : (t1.apply(e1, arguments), setTimeout(s1, i1), n1 = !0);
+            n ? o = arguments : (t1.apply(i, arguments), setTimeout(s, e), n = !0);
         };
         return r;
     }
-    function o(t1, i1, e1) {
-        var n1 = i1[1], o1 = i1[0], s1 = n1 - o1;
-        return t1 === n1 && e1 ? t1 : ((t1 - o1) % s1 + s1) % s1 + o1;
+    function H(t1, e, i) {
+        var n = e[1], e = e[0], o = n - e;
+        return t1 === n && i ? t1 : ((t1 - e) % o + o) % o + e;
     }
-    function a() {
+    function u() {
         return !1;
     }
-    function r3(t1, i1) {
-        var e1 = Math.pow(10, (void 0) === i1 ? 6 : i1);
-        return Math.round(t1 * e1) / e1;
+    function i12(t1, e) {
+        return !1 === e ? t1 : (e = Math.pow(10, (void 0) === e ? 6 : e), Math.round(t1 * e) / e);
     }
-    function u(t1) {
+    function W(t1) {
         return t1.trim ? t1.trim() : t1.replace(/^\s+|\s+$/g, "");
     }
-    function l(t1) {
-        return u(t1).split(/\s+/);
+    function F(t1) {
+        return W(t1).split(/\s+/);
     }
-    function c(t1, i1) {
-        for(var e1 in Object.prototype.hasOwnProperty.call(t1, "options") || (t1.options = t1.options ? s(t1.options) : {
-        }), i1)t1.options[e1] = i1[e1];
+    function c(t1, e) {
+        for(var i1 in Object.prototype.hasOwnProperty.call(t1, "options") || (t1.options = t1.options ? R(t1.options) : {
+        }), e)t1.options[i1] = e[i1];
         return t1.options;
     }
-    function _(t1, i1, e1) {
-        var n1 = [];
-        for(var o1 in t1)n1.push(encodeURIComponent(e1 ? o1.toUpperCase() : o1) + "=" + encodeURIComponent(t1[o1]));
-        return (i1 && -1 !== i1.indexOf("?") ? "&" : "?") + n1.join("&");
+    function U(t1, e, i1) {
+        var n, o = [];
+        for(n in t1)o.push(encodeURIComponent(i1 ? n.toUpperCase() : n) + "=" + encodeURIComponent(t1[n]));
+        return (e && -1 !== e.indexOf("?") ? "&" : "?") + o.join("&");
     }
-    var d = /\{ *([\w_-]+) *\}/g;
-    function f(t1, n1) {
-        return t1.replace(d, function(t2, i1) {
-            var e1 = n1[i1];
-            if ((void 0) === e1) throw new Error("No value provided for variable " + t2);
-            return "function" == typeof e1 && (e1 = e1(n1)), e1;
+    var V = /\{ *([\w_ -]+) *\}/g;
+    function q(t1, i1) {
+        return t1.replace(V, function(t2, e) {
+            e = i1[e];
+            if ((void 0) === e) throw new Error("No value provided for variable " + t2);
+            return e = "function" == typeof e ? e(i1) : e;
         });
     }
-    var g = Array.isArray || function(t1) {
+    var d = Array.isArray || function(t1) {
         return "[object Array]" === Object.prototype.toString.call(t1);
     };
-    function v(t1, i1) {
-        for(var e1 = 0; e1 < t1.length; e1++)if (t1[e1] === i1) return e1;
+    function G(t1, e) {
+        for(var i1 = 0; i1 < t1.length; i1++)if (t1[i1] === e) return i1;
         return -1;
     }
-    var y = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
-    function x(t1) {
+    var K = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
+    function Y(t1) {
         return window["webkit" + t1] || window["moz" + t1] || window["ms" + t1];
     }
-    var w = 0;
-    function P(t1) {
-        var i1 = +new Date, e1 = Math.max(0, 16 - (i1 - w));
-        return w = i1 + e1, window.setTimeout(t1, e1);
+    var X = 0;
+    function J(t1) {
+        var e = +new Date, i1 = Math.max(0, 16 - (e - X));
+        return X = e + i1, window.setTimeout(t1, i1);
     }
-    var b = window.requestAnimationFrame || x("RequestAnimationFrame") || P, T = window.cancelAnimationFrame || x("CancelAnimationFrame") || x("CancelRequestAnimationFrame") || function(t1) {
+    var $ = window.requestAnimationFrame || Y("RequestAnimationFrame") || J, Q = window.cancelAnimationFrame || Y("CancelAnimationFrame") || Y("CancelRequestAnimationFrame") || function(t1) {
         window.clearTimeout(t1);
     };
-    function M(t1, i1, e1) {
-        if (!e1 || b !== P) return b.call(window, p(t1, i1));
-        t1.call(i1);
+    function x(t1, e, i1) {
+        if (!i1 || $ !== J) return $.call(window, a2(t1, e));
+        t1.call(e);
     }
-    function z(t1) {
-        t1 && T.call(window, t1);
+    function r(t1) {
+        t1 && Q.call(window, t1);
     }
-    var C = {
-        extend: h,
-        create: s,
-        bind: p,
-        lastId: e,
-        stamp: m,
-        throttle: n,
-        wrapNum: o,
-        falseFn: a,
-        formatNum: r3,
-        trim: u,
-        splitWords: l,
+    var tt = {
+        __proto__: null,
+        extend: l,
+        create: R,
+        bind: a2,
+        get lastId () {
+            return D;
+        },
+        stamp: h,
+        throttle: j,
+        wrapNum: H,
+        falseFn: u,
+        formatNum: i12,
+        trim: W,
+        splitWords: F,
         setOptions: c,
-        getParamString: _,
-        template: f,
-        isArray: g,
-        indexOf: v,
-        emptyImageUrl: y,
-        requestFn: b,
-        cancelFn: T,
-        requestAnimFrame: M,
-        cancelAnimFrame: z
+        getParamString: U,
+        template: q,
+        isArray: d,
+        indexOf: G,
+        emptyImageUrl: K,
+        requestFn: $,
+        cancelFn: Q,
+        requestAnimFrame: x,
+        cancelAnimFrame: r
     };
-    function S() {
+    function et() {
     }
-    S.extend = function(t1) {
-        function i1() {
-            this.initialize && this.initialize.apply(this, arguments), this.callInitHooks();
+    et.extend = function(t1) {
+        function e() {
+            c(this), this.initialize && this.initialize.apply(this, arguments), this.callInitHooks();
         }
-        var e1 = i1.__super__ = this.prototype, n1 = s(e1);
-        for(var o1 in (n1.constructor = i1).prototype = n1, this)Object.prototype.hasOwnProperty.call(this, o1) && "prototype" !== o1 && "__super__" !== o1 && (i1[o1] = this[o1]);
-        return t1.statics && (h(i1, t1.statics), delete t1.statics), t1.includes && ((function(t2) {
-            if ("undefined" == typeof L || !L || !L.Mixin) return;
-            t2 = g(t2) ? t2 : [
-                t2
-            ];
-            for(var i2 = 0; i2 < t2.length; i2++)t2[i2] === L.Mixin.Events && console.warn("Deprecated include of L.Mixin.Events: this property will be removed in future releases, please inherit from L.Evented instead.", (new Error).stack);
-        })(t1.includes), h.apply(null, [
-            n1
-        ].concat(t1.includes)), delete t1.includes), n1.options && (t1.options = h(s(n1.options), t1.options)), h(n1, t1), n1._initHooks = [], n1.callInitHooks = function() {
-            if (!this._initHooksCalled) {
-                e1.callInitHooks && e1.callInitHooks.call(this), this._initHooksCalled = !0;
-                for(var t2 = 0, i2 = n1._initHooks.length; t2 < i2; t2++)n1._initHooks[t2].call(this);
+        var i1, n = e.__super__ = this.prototype, o = R(n);
+        for(i1 in (o.constructor = e).prototype = o, this)Object.prototype.hasOwnProperty.call(this, i1) && "prototype" !== i1 && "__super__" !== i1 && (e[i1] = this[i1]);
+        if (t1.statics && l(e, t1.statics), t1.includes) {
+            var s = t1.includes;
+            if ("undefined" != typeof L && L && L.Mixin) {
+                s = d(s) ? s : [
+                    s
+                ];
+                for(var r1 = 0; r1 < s.length; r1++)s[r1] === L.Mixin.Events && console.warn("Deprecated include of L.Mixin.Events: this property will be removed in future releases, please inherit from L.Evented instead.", (new Error).stack);
             }
-        }, i1;
-    }, S.include = function(t1) {
-        return h(this.prototype, t1), this;
-    }, S.mergeOptions = function(t1) {
-        return h(this.prototype.options, t1), this;
-    }, S.addInitHook = function(t1) {
-        var i1 = Array.prototype.slice.call(arguments, 1), e1 = "function" == typeof t1 ? t1 : function() {
-            this[t1].apply(this, i1);
+            l.apply(null, [
+                o
+            ].concat(t1.includes));
+        }
+        return l(o, t1), delete o.statics, delete o.includes, o.options && (o.options = n.options ? R(n.options) : {
+        }, l(o.options, t1.options)), o._initHooks = [], o.callInitHooks = function() {
+            if (!this._initHooksCalled) {
+                n.callInitHooks && n.callInitHooks.call(this), this._initHooksCalled = !0;
+                for(var t2 = 0, e1 = o._initHooks.length; t2 < e1; t2++)o._initHooks[t2].call(this);
+            }
+        }, e;
+    }, et.include = function(t1) {
+        var e2 = this.prototype.options;
+        return l(this.prototype, t1), t1.options && (this.prototype.options = e2, this.mergeOptions(t1.options)), this;
+    }, et.mergeOptions = function(t1) {
+        return l(this.prototype.options, t1), this;
+    }, et.addInitHook = function(t1) {
+        var e2 = Array.prototype.slice.call(arguments, 1), i1 = "function" == typeof t1 ? t1 : function() {
+            this[t1].apply(this, e2);
         };
-        return this.prototype._initHooks = this.prototype._initHooks || [], this.prototype._initHooks.push(e1), this;
+        return this.prototype._initHooks = this.prototype._initHooks || [], this.prototype._initHooks.push(i1), this;
     };
-    var Z = {
-        on: function(t1, i1, e1) {
-            if ("object" == typeof t1) for(var n1 in t1)this._on(n1, t1[n1], i1);
-            else for(var o1 = 0, s1 = (t1 = l(t1)).length; o1 < s1; o1++)this._on(t1[o1], i1, e1);
+    var e2 = {
+        on: function(t1, e3, i1) {
+            if ("object" == typeof t1) for(var n in t1)this._on(n, t1[n], e3);
+            else for(var o = 0, s = (t1 = F(t1)).length; o < s; o++)this._on(t1[o], e3, i1);
             return this;
         },
-        off: function(t1, i1, e1) {
-            if (t1) {
-                if ("object" == typeof t1) for(var n1 in t1)this._off(n1, t1[n1], i1);
-                else for(var o1 = 0, s1 = (t1 = l(t1)).length; o1 < s1; o1++)this._off(t1[o1], i1, e1);
+        off: function(t1, e3, i1) {
+            if (arguments.length) {
+                if ("object" == typeof t1) for(var n in t1)this._off(n, t1[n], e3);
+                else {
+                    t1 = F(t1);
+                    for(var o = 1 === arguments.length, s = 0, r2 = t1.length; s < r2; s++)o ? this._off(t1[s]) : this._off(t1[s], e3, i1);
+                }
             } else delete this._events;
             return this;
         },
-        _on: function(t1, i1, e1) {
-            this._events = this._events || {
-            };
-            var n2 = this._events[t1];
-            n2 || (n2 = [], this._events[t1] = n2), e1 === this && (e1 = void 0);
-            for(var o2 = {
-                fn: i1,
-                ctx: e1
-            }, s2 = n2, r1 = 0, a1 = s2.length; r1 < a1; r1++)if (s2[r1].fn === i1 && s2[r1].ctx === e1) return;
-            s2.push(o2);
+        _on: function(t1, e3, i1, n) {
+            "function" != typeof e3 ? console.warn("wrong listener type: " + typeof e3) : !1 === this._listens(t1, e3, i1) && (e3 = {
+                fn: e3,
+                ctx: i1 = i1 === this ? void 0 : i1
+            }, n && (e3.once = !0), this._events = this._events || {
+            }, this._events[t1] = this._events[t1] || [], this._events[t1].push(e3));
         },
-        _off: function(t1, i1, e1) {
-            var n2, o2, s2;
-            if (this._events && (n2 = this._events[t1])) {
-                if (i1) {
-                    if (e1 === this && (e1 = void 0), n2) for(o2 = 0, s2 = n2.length; o2 < s2; o2++){
-                        var r1 = n2[o2];
-                        if (r1.ctx === e1 && r1.fn === i1) return r1.fn = a, this._firingCount && (this._events[t1] = n2 = n2.slice()), void n2.splice(o2, 1);
-                    }
-                } else {
-                    for(o2 = 0, s2 = n2.length; o2 < s2; o2++)n2[o2].fn = a;
+        _off: function(t1, e3, i1) {
+            var n, o, s;
+            if (this._events && (n = this._events[t1])) {
+                if (1 === arguments.length) {
+                    if (this._firingCount) for(o = 0, s = n.length; o < s; o++)n[o].fn = u;
                     delete this._events[t1];
-                }
+                } else "function" != typeof e3 ? console.warn("wrong listener type: " + typeof e3) : !1 !== (e3 = this._listens(t1, e3, i1)) && (i1 = n[e3], this._firingCount && (i1.fn = u, this._events[t1] = n = n.slice()), n.splice(e3, 1));
             }
         },
-        fire: function(t1, i1, e1) {
-            if (!this.listens(t1, e1)) return this;
-            var n2 = h({
-            }, i1, {
-                type: t1,
-                target: this,
-                sourceTarget: i1 && i1.sourceTarget || this
-            });
-            if (this._events) {
-                var o2 = this._events[t1];
-                if (o2) {
-                    this._firingCount = this._firingCount + 1 || 1;
-                    for(var s2 = 0, r2 = o2.length; s2 < r2; s2++){
-                        var a1 = o2[s2];
-                        a1.fn.call(a1.ctx || this, n2);
+        fire: function(t1, e3, i1) {
+            if (this.listens(t1, i1)) {
+                var n = l({
+                }, e3, {
+                    type: t1,
+                    target: this,
+                    sourceTarget: e3 && e3.sourceTarget || this
+                });
+                if (this._events) {
+                    var o = this._events[t1];
+                    if (o) {
+                        this._firingCount = this._firingCount + 1 || 1;
+                        for(var s = 0, r3 = o.length; s < r3; s++){
+                            var a1 = o[s], h1 = a1.fn;
+                            a1.once && this.off(t1, h1, a1.ctx), h1.call(a1.ctx || this, n);
+                        }
+                        this._firingCount--;
                     }
-                    this._firingCount--;
                 }
+                i1 && this._propagateEvent(n);
             }
-            return e1 && this._propagateEvent(n2), this;
+            return this;
         },
-        listens: function(t1, i1) {
-            var e1 = this._events && this._events[t1];
-            if (e1 && e1.length) return !0;
-            if (i1) for(var n2 in this._eventParents)if (this._eventParents[n2].listens(t1, i1)) return !0;
+        listens: function(t1, e3, i1, n) {
+            "string" != typeof t1 && console.warn('"string" type argument expected');
+            var o = e3, s = ("function" != typeof e3 && (n = !!e3, i1 = o = void 0), this._events && this._events[t1]);
+            if (s && s.length && !1 !== this._listens(t1, o, i1)) return !0;
+            if (n) for(var r4 in this._eventParents)if (this._eventParents[r4].listens(t1, e3, i1, n)) return !0;
             return !1;
         },
-        once: function(t1, i1, e1) {
-            if ("object" == typeof t1) {
-                for(var n2 in t1)this.once(n2, t1[n2], i1);
-                return this;
+        _listens: function(t1, e3, i1) {
+            if (this._events) {
+                var n = this._events[t1] || [];
+                if (!e3) return !!n.length;
+                i1 === this && (i1 = void 0);
+                for(var o = 0, s = n.length; o < s; o++)if (n[o].fn === e3 && n[o].ctx === i1) return o;
             }
-            var o3 = p(function() {
-                this.off(t1, i1, e1).off(t1, o3, e1);
-            }, this);
-            return this.on(t1, i1, e1).on(t1, o3, e1);
+            return !1;
+        },
+        once: function(t1, e3, i1) {
+            if ("object" == typeof t1) for(var n in t1)this._on(n, t1[n], e3, !0);
+            else for(var o = 0, s = (t1 = F(t1)).length; o < s; o++)this._on(t1[o], e3, i1, !0);
+            return this;
         },
         addEventParent: function(t1) {
             return this._eventParents = this._eventParents || {
-            }, this._eventParents[m(t1)] = t1, this;
+            }, this._eventParents[h(t1)] = t1, this;
         },
         removeEventParent: function(t1) {
-            return this._eventParents && delete this._eventParents[m(t1)], this;
+            return this._eventParents && delete this._eventParents[h(t1)], this;
         },
         _propagateEvent: function(t1) {
-            for(var i1 in this._eventParents)this._eventParents[i1].fire(t1.type, h({
+            for(var e3 in this._eventParents)this._eventParents[e3].fire(t1.type, l({
                 layer: t1.target,
                 propagatedFrom: t1.target
             }, t1), !0);
         }
-    };
-    Z.addEventListener = Z.on, Z.removeEventListener = Z.clearAllEventListeners = Z.off, Z.addOneTimeEventListener = Z.once, Z.fireEvent = Z.fire, Z.hasEventListeners = Z.listens;
-    var E = S.extend(Z);
-    function k(t1, i1, e1) {
-        this.x = e1 ? Math.round(t1) : t1, this.y = e1 ? Math.round(i1) : i1;
+    }, it = (e2.addEventListener = e2.on, e2.removeEventListener = e2.clearAllEventListeners = e2.off, e2.addOneTimeEventListener = e2.once, e2.fireEvent = e2.fire, e2.hasEventListeners = e2.listens, et.extend(e2));
+    function p(t1, e3, i1) {
+        this.x = i1 ? Math.round(t1) : t1, this.y = i1 ? Math.round(e3) : e3;
     }
-    var B = Math.trunc || function(t1) {
+    var nt = Math.trunc || function(t1) {
         return 0 < t1 ? Math.floor(t1) : Math.ceil(t1);
     };
-    function A(t1, i1, e1) {
-        return t1 instanceof k ? t1 : g(t1) ? new k(t1[0], t1[1]) : null == t1 ? t1 : "object" == typeof t1 && "x" in t1 && "y" in t1 ? new k(t1.x, t1.y) : new k(t1, i1, e1);
+    function m(t1, e3, i1) {
+        return t1 instanceof p ? t1 : d(t1) ? new p(t1[0], t1[1]) : null == t1 ? t1 : "object" == typeof t1 && "x" in t1 && "y" in t1 ? new p(t1.x, t1.y) : new p(t1, e3, i1);
     }
-    function I(t1, i1) {
-        if (t1) for(var e1 = i1 ? [
+    function f(t1, e3) {
+        if (t1) for(var i1 = e3 ? [
             t1,
-            i1
-        ] : t1, n3 = 0, o3 = e1.length; n3 < o3; n3++)this.extend(e1[n3]);
+            e3
+        ] : t1, n = 0, o = i1.length; n < o; n++)this.extend(i1[n]);
     }
-    function O(t1, i1) {
-        return !t1 || t1 instanceof I ? t1 : new I(t1, i1);
+    function _(t1, e3) {
+        return !t1 || t1 instanceof f ? t1 : new f(t1, e3);
     }
-    function R(t1, i1) {
-        if (t1) for(var e1 = i1 ? [
+    function s(t1, e3) {
+        if (t1) for(var i1 = e3 ? [
             t1,
-            i1
-        ] : t1, n3 = 0, o3 = e1.length; n3 < o3; n3++)this.extend(e1[n3]);
+            e3
+        ] : t1, n = 0, o = i1.length; n < o; n++)this.extend(i1[n]);
     }
-    function N(t1, i1) {
-        return t1 instanceof R ? t1 : new R(t1, i1);
+    function g(t1, e3) {
+        return t1 instanceof s ? t1 : new s(t1, e3);
     }
-    function D(t1, i1, e1) {
-        if (isNaN(t1) || isNaN(i1)) throw new Error("Invalid LatLng object: (" + t1 + ", " + i1 + ")");
-        this.lat = +t1, this.lng = +i1, (void 0) !== e1 && (this.alt = +e1);
+    function v(t1, e3, i1) {
+        if (isNaN(t1) || isNaN(e3)) throw new Error("Invalid LatLng object: (" + t1 + ", " + e3 + ")");
+        this.lat = +t1, this.lng = +e3, (void 0) !== i1 && (this.alt = +i1);
     }
-    function j(t1, i1, e1) {
-        return t1 instanceof D ? t1 : g(t1) && "object" != typeof t1[0] ? 3 === t1.length ? new D(t1[0], t1[1], t1[2]) : 2 === t1.length ? new D(t1[0], t1[1]) : null : null == t1 ? t1 : "object" == typeof t1 && "lat" in t1 ? new D(t1.lat, "lng" in t1 ? t1.lng : t1.lon, t1.alt) : (void 0) === i1 ? null : new D(t1, i1, e1);
+    function w(t1, e3, i1) {
+        return t1 instanceof v ? t1 : d(t1) && "object" != typeof t1[0] ? 3 === t1.length ? new v(t1[0], t1[1], t1[2]) : 2 === t1.length ? new v(t1[0], t1[1]) : null : null == t1 ? t1 : "object" == typeof t1 && "lat" in t1 ? new v(t1.lat, "lng" in t1 ? t1.lng : t1.lon, t1.alt) : (void 0) === e3 ? null : new v(t1, e3, i1);
     }
-    k.prototype = {
+    p.prototype = {
         clone: function() {
-            return new k(this.x, this.y);
+            return new p(this.x, this.y);
         },
         add: function(t1) {
-            return this.clone()._add(A(t1));
+            return this.clone()._add(m(t1));
         },
         _add: function(t1) {
             return this.x += t1.x, this.y += t1.y, this;
         },
         subtract: function(t1) {
-            return this.clone()._subtract(A(t1));
+            return this.clone()._subtract(m(t1));
         },
         _subtract: function(t1) {
             return this.x -= t1.x, this.y -= t1.y, this;
@@ -1033,10 +1070,10 @@ function fitBoundsPadding(e) {
             return this.x *= t1, this.y *= t1, this;
         },
         scaleBy: function(t1) {
-            return new k(this.x * t1.x, this.y * t1.y);
+            return new p(this.x * t1.x, this.y * t1.y);
         },
         unscaleBy: function(t1) {
-            return new k(this.x / t1.x, this.y / t1.y);
+            return new p(this.x / t1.x, this.y / t1.y);
         },
         round: function() {
             return this.clone()._round();
@@ -1060,33 +1097,39 @@ function fitBoundsPadding(e) {
             return this.clone()._trunc();
         },
         _trunc: function() {
-            return this.x = B(this.x), this.y = B(this.y), this;
+            return this.x = nt(this.x), this.y = nt(this.y), this;
         },
         distanceTo: function(t1) {
-            var i1 = (t1 = A(t1)).x - this.x, e1 = t1.y - this.y;
-            return Math.sqrt(i1 * i1 + e1 * e1);
+            var e3 = (t1 = m(t1)).x - this.x, t1 = t1.y - this.y;
+            return Math.sqrt(e3 * e3 + t1 * t1);
         },
         equals: function(t1) {
-            return (t1 = A(t1)).x === this.x && t1.y === this.y;
+            return (t1 = m(t1)).x === this.x && t1.y === this.y;
         },
         contains: function(t1) {
-            return t1 = A(t1), Math.abs(t1.x) <= Math.abs(this.x) && Math.abs(t1.y) <= Math.abs(this.y);
+            return t1 = m(t1), Math.abs(t1.x) <= Math.abs(this.x) && Math.abs(t1.y) <= Math.abs(this.y);
         },
         toString: function() {
-            return "Point(" + r3(this.x) + ", " + r3(this.y) + ")";
+            return "Point(" + i12(this.x) + ", " + i12(this.y) + ")";
         }
-    }, I.prototype = {
+    }, f.prototype = {
         extend: function(t1) {
-            return t1 = A(t1), this.min || this.max ? (this.min.x = Math.min(t1.x, this.min.x), this.max.x = Math.max(t1.x, this.max.x), this.min.y = Math.min(t1.y, this.min.y), this.max.y = Math.max(t1.y, this.max.y)) : (this.min = t1.clone(), this.max = t1.clone()), this;
+            var e3, i1;
+            if (t1) {
+                if (t1 instanceof p || "number" == typeof t1[0] || "x" in t1) e3 = i1 = m(t1);
+                else if (e3 = (t1 = _(t1)).min, i1 = t1.max, !e3 || !i1) return this;
+                this.min || this.max ? (this.min.x = Math.min(e3.x, this.min.x), this.max.x = Math.max(i1.x, this.max.x), this.min.y = Math.min(e3.y, this.min.y), this.max.y = Math.max(i1.y, this.max.y)) : (this.min = e3.clone(), this.max = i1.clone());
+            }
+            return this;
         },
         getCenter: function(t1) {
-            return new k((this.min.x + this.max.x) / 2, (this.min.y + this.max.y) / 2, t1);
+            return m((this.min.x + this.max.x) / 2, (this.min.y + this.max.y) / 2, t1);
         },
         getBottomLeft: function() {
-            return new k(this.min.x, this.max.y);
+            return m(this.min.x, this.max.y);
         },
         getTopRight: function() {
-            return new k(this.max.x, this.min.y);
+            return m(this.max.x, this.min.y);
         },
         getTopLeft: function() {
             return this.min;
@@ -1098,38 +1141,45 @@ function fitBoundsPadding(e) {
             return this.max.subtract(this.min);
         },
         contains: function(t1) {
-            var i1, e1;
-            return (t1 = ("number" == typeof t1[0] || t1 instanceof k ? A : O)(t1)) instanceof I ? (i1 = t1.min, e1 = t1.max) : i1 = e1 = t1, i1.x >= this.min.x && e1.x <= this.max.x && i1.y >= this.min.y && e1.y <= this.max.y;
+            var e3, i1;
+            return (t1 = ("number" == typeof t1[0] || t1 instanceof p ? m : _)(t1)) instanceof f ? (e3 = t1.min, i1 = t1.max) : e3 = i1 = t1, e3.x >= this.min.x && i1.x <= this.max.x && e3.y >= this.min.y && i1.y <= this.max.y;
         },
         intersects: function(t1) {
-            t1 = O(t1);
-            var i1 = this.min, e1 = this.max, n3 = t1.min, o3 = t1.max, s3 = o3.x >= i1.x && n3.x <= e1.x, r3 = o3.y >= i1.y && n3.y <= e1.y;
-            return s3 && r3;
+            t1 = _(t1);
+            var e3 = this.min, i1 = this.max, n = t1.min, t1 = t1.max, o = t1.x >= e3.x && n.x <= i1.x, t1 = t1.y >= e3.y && n.y <= i1.y;
+            return o && t1;
         },
         overlaps: function(t1) {
-            t1 = O(t1);
-            var i1 = this.min, e1 = this.max, n3 = t1.min, o3 = t1.max, s3 = o3.x > i1.x && n3.x < e1.x, r3 = o3.y > i1.y && n3.y < e1.y;
-            return s3 && r3;
+            t1 = _(t1);
+            var e3 = this.min, i1 = this.max, n = t1.min, t1 = t1.max, o = t1.x > e3.x && n.x < i1.x, t1 = t1.y > e3.y && n.y < i1.y;
+            return o && t1;
         },
         isValid: function() {
             return !(!this.min || !this.max);
-        }
-    }, R.prototype = {
-        extend: function(t1) {
-            var i1, e1, n3 = this._southWest, o3 = this._northEast;
-            if (t1 instanceof D) e1 = i1 = t1;
-            else {
-                if (!(t1 instanceof R)) return t1 ? this.extend(j(t1) || N(t1)) : this;
-                if (i1 = t1._southWest, e1 = t1._northEast, !i1 || !e1) return this;
-            }
-            return n3 || o3 ? (n3.lat = Math.min(i1.lat, n3.lat), n3.lng = Math.min(i1.lng, n3.lng), o3.lat = Math.max(e1.lat, o3.lat), o3.lng = Math.max(e1.lng, o3.lng)) : (this._southWest = new D(i1.lat, i1.lng), this._northEast = new D(e1.lat, e1.lng)), this;
         },
         pad: function(t1) {
-            var i1 = this._southWest, e1 = this._northEast, n3 = Math.abs(i1.lat - e1.lat) * t1, o3 = Math.abs(i1.lng - e1.lng) * t1;
-            return new R(new D(i1.lat - n3, i1.lng - o3), new D(e1.lat + n3, e1.lng + o3));
+            var e3 = this.min, i1 = this.max, n = Math.abs(e3.x - i1.x) * t1, t1 = Math.abs(e3.y - i1.y) * t1;
+            return _(m(e3.x - n, e3.y - t1), m(i1.x + n, i1.y + t1));
+        },
+        equals: function(t1) {
+            return !!t1 && (t1 = _(t1), this.min.equals(t1.getTopLeft()) && this.max.equals(t1.getBottomRight()));
+        }
+    }, s.prototype = {
+        extend: function(t1) {
+            var e3, i1, n = this._southWest, o = this._northEast;
+            if (t1 instanceof v) i1 = e3 = t1;
+            else {
+                if (!(t1 instanceof s)) return t1 ? this.extend(w(t1) || g(t1)) : this;
+                if (e3 = t1._southWest, i1 = t1._northEast, !e3 || !i1) return this;
+            }
+            return n || o ? (n.lat = Math.min(e3.lat, n.lat), n.lng = Math.min(e3.lng, n.lng), o.lat = Math.max(i1.lat, o.lat), o.lng = Math.max(i1.lng, o.lng)) : (this._southWest = new v(e3.lat, e3.lng), this._northEast = new v(i1.lat, i1.lng)), this;
+        },
+        pad: function(t1) {
+            var e3 = this._southWest, i1 = this._northEast, n = Math.abs(e3.lat - i1.lat) * t1, t1 = Math.abs(e3.lng - i1.lng) * t1;
+            return new s(new v(e3.lat - n, e3.lng - t1), new v(i1.lat + n, i1.lng + t1));
         },
         getCenter: function() {
-            return new D((this._southWest.lat + this._northEast.lat) / 2, (this._southWest.lng + this._northEast.lng) / 2);
+            return new v((this._southWest.lat + this._northEast.lat) / 2, (this._southWest.lng + this._northEast.lng) / 2);
         },
         getSouthWest: function() {
             return this._southWest;
@@ -1138,10 +1188,10 @@ function fitBoundsPadding(e) {
             return this._northEast;
         },
         getNorthWest: function() {
-            return new D(this.getNorth(), this.getWest());
+            return new v(this.getNorth(), this.getWest());
         },
         getSouthEast: function() {
-            return new D(this.getSouth(), this.getEast());
+            return new v(this.getSouth(), this.getEast());
         },
         getWest: function() {
             return this._southWest.lng;
@@ -1156,19 +1206,19 @@ function fitBoundsPadding(e) {
             return this._northEast.lat;
         },
         contains: function(t1) {
-            t1 = ("number" == typeof t1[0] || t1 instanceof D || "lat" in t1 ? j : N)(t1);
-            var i1, e1, n3 = this._southWest, o3 = this._northEast;
-            return t1 instanceof R ? (i1 = t1.getSouthWest(), e1 = t1.getNorthEast()) : i1 = e1 = t1, i1.lat >= n3.lat && e1.lat <= o3.lat && i1.lng >= n3.lng && e1.lng <= o3.lng;
+            t1 = ("number" == typeof t1[0] || t1 instanceof v || "lat" in t1 ? w : g)(t1);
+            var e3, i1, n = this._southWest, o = this._northEast;
+            return t1 instanceof s ? (e3 = t1.getSouthWest(), i1 = t1.getNorthEast()) : e3 = i1 = t1, e3.lat >= n.lat && i1.lat <= o.lat && e3.lng >= n.lng && i1.lng <= o.lng;
         },
         intersects: function(t1) {
-            t1 = N(t1);
-            var i1 = this._southWest, e1 = this._northEast, n3 = t1.getSouthWest(), o3 = t1.getNorthEast(), s3 = o3.lat >= i1.lat && n3.lat <= e1.lat, r3 = o3.lng >= i1.lng && n3.lng <= e1.lng;
-            return s3 && r3;
+            t1 = g(t1);
+            var e3 = this._southWest, i1 = this._northEast, n = t1.getSouthWest(), t1 = t1.getNorthEast(), o = t1.lat >= e3.lat && n.lat <= i1.lat, t1 = t1.lng >= e3.lng && n.lng <= i1.lng;
+            return o && t1;
         },
         overlaps: function(t1) {
-            t1 = N(t1);
-            var i1 = this._southWest, e1 = this._northEast, n3 = t1.getSouthWest(), o3 = t1.getNorthEast(), s3 = o3.lat > i1.lat && n3.lat < e1.lat, r3 = o3.lng > i1.lng && n3.lng < e1.lng;
-            return s3 && r3;
+            t1 = g(t1);
+            var e3 = this._southWest, i1 = this._northEast, n = t1.getSouthWest(), t1 = t1.getNorthEast(), o = t1.lat > e3.lat && n.lat < i1.lat, t1 = t1.lng > e3.lng && n.lng < i1.lng;
+            return o && t1;
         },
         toBBoxString: function() {
             return [
@@ -1178,21 +1228,21 @@ function fitBoundsPadding(e) {
                 this.getNorth()
             ].join(",");
         },
-        equals: function(t1, i1) {
-            return !!t1 && (t1 = N(t1), this._southWest.equals(t1.getSouthWest(), i1) && this._northEast.equals(t1.getNorthEast(), i1));
+        equals: function(t1, e3) {
+            return !!t1 && (t1 = g(t1), this._southWest.equals(t1.getSouthWest(), e3) && this._northEast.equals(t1.getNorthEast(), e3));
         },
         isValid: function() {
             return !(!this._southWest || !this._northEast);
         }
     };
-    var W, H = {
-        latLngToPoint: function(t1, i1) {
-            var e1 = this.projection.project(t1), n3 = this.scale(i1);
-            return this.transformation._transform(e1, n3);
+    var ot = {
+        latLngToPoint: function(t1, e3) {
+            t1 = this.projection.project(t1), e3 = this.scale(e3);
+            return this.transformation._transform(t1, e3);
         },
-        pointToLatLng: function(t1, i1) {
-            var e1 = this.scale(i1), n3 = this.transformation.untransform(t1, e1);
-            return this.projection.unproject(n3);
+        pointToLatLng: function(t1, e3) {
+            e3 = this.scale(e3), t1 = this.transformation.untransform(t1, e3);
+            return this.projection.unproject(t1);
         },
         project: function(t1) {
             return this.projection.project(t1);
@@ -1207,510 +1257,507 @@ function fitBoundsPadding(e) {
             return Math.log(t1 / 256) / Math.LN2;
         },
         getProjectedBounds: function(t1) {
-            if (this.infinite) return null;
-            var i1 = this.projection.bounds, e1 = this.scale(t1);
-            return new I(this.transformation.transform(i1.min, e1), this.transformation.transform(i1.max, e1));
+            var e3;
+            return this.infinite ? null : (e3 = this.projection.bounds, t1 = this.scale(t1), new f(this.transformation.transform(e3.min, t1), this.transformation.transform(e3.max, t1)));
         },
-        infinite: (D.prototype = {
-            equals: function(t1, i1) {
-                return !!t1 && (t1 = j(t1), Math.max(Math.abs(this.lat - t1.lat), Math.abs(this.lng - t1.lng)) <= ((void 0) === i1 ? 0.000000001 : i1));
+        infinite: (v.prototype = {
+            equals: function(t1, e3) {
+                return !!t1 && (t1 = w(t1), Math.max(Math.abs(this.lat - t1.lat), Math.abs(this.lng - t1.lng)) <= ((void 0) === e3 ? 0.000000001 : e3));
             },
             toString: function(t1) {
-                return "LatLng(" + r3(this.lat, t1) + ", " + r3(this.lng, t1) + ")";
+                return "LatLng(" + i12(this.lat, t1) + ", " + i12(this.lng, t1) + ")";
             },
             distanceTo: function(t1) {
-                return F.distance(this, j(t1));
+                return st.distance(this, w(t1));
             },
             wrap: function() {
-                return F.wrapLatLng(this);
+                return st.wrapLatLng(this);
             },
             toBounds: function(t1) {
-                var i1 = 180 * t1 / 40075017, e1 = i1 / Math.cos(Math.PI / 180 * this.lat);
-                return N([
-                    this.lat - i1,
-                    this.lng - e1
+                var t1 = 180 * t1 / 40075017, e3 = t1 / Math.cos(Math.PI / 180 * this.lat);
+                return g([
+                    this.lat - t1,
+                    this.lng - e3
                 ], [
-                    this.lat + i1,
-                    this.lng + e1
+                    this.lat + t1,
+                    this.lng + e3
                 ]);
             },
             clone: function() {
-                return new D(this.lat, this.lng, this.alt);
+                return new v(this.lat, this.lng, this.alt);
             }
         }, false),
         wrapLatLng: function(t1) {
-            var i1 = this.wrapLng ? o(t1.lng, this.wrapLng, !0) : t1.lng;
-            return new D(this.wrapLat ? o(t1.lat, this.wrapLat, !0) : t1.lat, i1, t1.alt);
+            var e3 = this.wrapLng ? H(t1.lng, this.wrapLng, !0) : t1.lng;
+            return new v(this.wrapLat ? H(t1.lat, this.wrapLat, !0) : t1.lat, e3, t1.alt);
         },
         wrapLatLngBounds: function(t1) {
-            var i1 = t1.getCenter(), e1 = this.wrapLatLng(i1), n3 = i1.lat - e1.lat, o3 = i1.lng - e1.lng;
-            if (0 == n3 && 0 == o3) return t1;
-            var s3 = t1.getSouthWest(), r3 = t1.getNorthEast();
-            return new R(new D(s3.lat - n3, s3.lng - o3), new D(r3.lat - n3, r3.lng - o3));
+            var e3 = t1.getCenter(), i1 = this.wrapLatLng(e3), n = e3.lat - i1.lat, e3 = e3.lng - i1.lng;
+            return 0 == n && 0 == e3 ? t1 : (i1 = t1.getSouthWest(), t1 = t1.getNorthEast(), new s(new v(i1.lat - n, i1.lng - e3), new v(t1.lat - n, t1.lng - e3)));
         }
-    }, F = h({
-    }, H, {
+    }, st = l({
+    }, ot, {
         wrapLng: [
             -180,
             180
         ],
         R: 6371000,
-        distance: function(t1, i1) {
-            var e1 = Math.PI / 180, n3 = t1.lat * e1, o3 = i1.lat * e1, s3 = Math.sin((i1.lat - t1.lat) * e1 / 2), r3 = Math.sin((i1.lng - t1.lng) * e1 / 2), a2 = s3 * s3 + Math.cos(n3) * Math.cos(o3) * r3 * r3, h1 = 2 * Math.atan2(Math.sqrt(a2), Math.sqrt(1 - a2));
-            return this.R * h1;
+        distance: function(t1, e3) {
+            var i1 = Math.PI / 180, n = t1.lat * i1, o = e3.lat * i1, s1 = Math.sin((e3.lat - t1.lat) * i1 / 2), e3 = Math.sin((e3.lng - t1.lng) * i1 / 2), t1 = s1 * s1 + Math.cos(n) * Math.cos(o) * e3 * e3, i1 = 2 * Math.atan2(Math.sqrt(t1), Math.sqrt(1 - t1));
+            return this.R * i1;
         }
-    }), U = 6378137, V = {
-        R: U,
+    }), rt = 6378137, rt = {
+        R: rt,
         MAX_LATITUDE: 85.0511287798,
         project: function(t1) {
-            var i1 = Math.PI / 180, e1 = this.MAX_LATITUDE, n3 = Math.max(Math.min(e1, t1.lat), -e1), o3 = Math.sin(n3 * i1);
-            return new k(this.R * t1.lng * i1, this.R * Math.log((1 + o3) / (1 - o3)) / 2);
+            var e3 = Math.PI / 180, i1 = this.MAX_LATITUDE, i1 = Math.max(Math.min(i1, t1.lat), -i1), i1 = Math.sin(i1 * e3);
+            return new p(this.R * t1.lng * e3, this.R * Math.log((1 + i1) / (1 - i1)) / 2);
         },
         unproject: function(t1) {
-            var i1 = 180 / Math.PI;
-            return new D((2 * Math.atan(Math.exp(t1.y / this.R)) - Math.PI / 2) * i1, t1.x * i1 / this.R);
+            var e3 = 180 / Math.PI;
+            return new v((2 * Math.atan(Math.exp(t1.y / this.R)) - Math.PI / 2) * e3, t1.x * e3 / this.R);
         },
-        bounds: new I([
-            -(W = U * Math.PI),
-            -W
+        bounds: new f([
+            -(rt = rt * Math.PI),
+            -rt
         ], [
-            W,
-            W
+            rt,
+            rt
         ])
     };
-    function q(t1, i1, e1, n3) {
-        if (g(t1)) return this._a = t1[0], this._b = t1[1], this._c = t1[2], void (this._d = t1[3]);
-        this._a = t1, this._b = i1, this._c = e1, this._d = n3;
+    function at(t1, e3, i1, n) {
+        d(t1) ? (this._a = t1[0], this._b = t1[1], this._c = t1[2], this._d = t1[3]) : (this._a = t1, this._b = e3, this._c = i1, this._d = n);
     }
-    function G(t1, i1, e1, n3) {
-        return new q(t1, i1, e1, n3);
+    function ht(t1, e3, i1, n) {
+        return new at(t1, e3, i1, n);
     }
-    q.prototype = {
-        transform: function(t1, i1) {
-            return this._transform(t1.clone(), i1);
+    at.prototype = {
+        transform: function(t1, e3) {
+            return this._transform(t1.clone(), e3);
         },
-        _transform: function(t1, i1) {
-            return i1 = i1 || 1, t1.x = i1 * (this._a * t1.x + this._b), t1.y = i1 * (this._c * t1.y + this._d), t1;
+        _transform: function(t1, e3) {
+            return t1.x = (e3 = e3 || 1) * (this._a * t1.x + this._b), t1.y = e3 * (this._c * t1.y + this._d), t1;
         },
-        untransform: function(t1, i1) {
-            return i1 = i1 || 1, new k((t1.x / i1 - this._b) / this._a, (t1.y / i1 - this._d) / this._c);
+        untransform: function(t1, e3) {
+            return new p((t1.x / (e3 = e3 || 1) - this._b) / this._a, (t1.y / e3 - this._d) / this._c);
         }
     };
-    var K, Y = h({
-    }, F, {
+    var lt = l({
+    }, st, {
         code: "EPSG:3857",
-        projection: V,
-        transformation: G(K = 0.5 / (Math.PI * V.R), 0.5, -K, 0.5)
-    }), X = h({
-    }, Y, {
+        projection: rt,
+        transformation: ht(lt = 0.5 / (Math.PI * rt.R), 0.5, -lt, 0.5)
+    }), ut = l({
+    }, lt, {
         code: "EPSG:900913"
     });
-    function J(t1) {
+    function ct(t1) {
         return document.createElementNS("http://www.w3.org/2000/svg", t1);
     }
-    function $(t1, i1) {
-        for(var e1, n3, o3, s3, r3 = "", a2 = 0, h1 = t1.length; a2 < h1; a2++){
-            for(e1 = 0, n3 = (o3 = t1[a2]).length; e1 < n3; e1++)r3 += (e1 ? "L" : "M") + (s3 = o3[e1]).x + " " + s3.y;
-            r3 += i1 ? Zt ? "z" : "x" : "";
+    function dt(t1, e3) {
+        for(var i1, n, o, s1, r4 = "", a2 = 0, h2 = t1.length; a2 < h2; a2++){
+            for(i1 = 0, n = (o = t1[a2]).length; i1 < n; i1++)r4 += (i1 ? "L" : "M") + (s1 = o[i1]).x + " " + s1.y;
+            r4 += e3 ? b.svg ? "z" : "x" : "";
         }
-        return r3 || "M0 0";
+        return r4 || "M0 0";
     }
-    var Q = document.documentElement.style, tt = "ActiveXObject" in window, it = tt && !document.addEventListener, et = "msLaunchUri" in navigator && !("documentMode" in document), nt = kt("webkit"), ot = kt("android"), st = kt("android 2") || kt("android 3"), rt = parseInt(/WebKit\/([0-9]+)|$/.exec(navigator.userAgent)[1], 10), at = ot && kt("Google") && rt < 537 && !("AudioNode" in window), ht = !!window.opera, ut = !et && kt("chrome"), lt = kt("gecko") && !nt && !ht && !tt, ct = !ut && kt("safari"), _t = kt("phantom"), dt = "OTransition" in Q, pt = 0 === navigator.platform.indexOf("Win"), mt = tt && "transition" in Q, ft = "WebKitCSSMatrix" in window && "m11" in new window.WebKitCSSMatrix && !st, gt = "MozPerspective" in Q, vt = !window.L_DISABLE_3D && (mt || ft || gt) && !dt && !_t, yt = "undefined" != typeof orientation || kt("mobile"), xt = yt && nt, wt = yt && ft, Pt = !window.PointerEvent && window.MSPointerEvent, Lt = !(!window.PointerEvent && !Pt), bt = !window.L_NO_TOUCH && (Lt || "ontouchstart" in window || window.DocumentTouch && document instanceof window.DocumentTouch), Tt = yt && ht, Mt = yt && lt, zt = 1 < (window.devicePixelRatio || window.screen.deviceXDPI / window.screen.logicalXDPI), Ct = function() {
+    var _t = document.documentElement.style, pt = "ActiveXObject" in window, mt = pt && !document.addEventListener, n7 = "msLaunchUri" in navigator && !("documentMode" in document), ft = y("webkit"), gt = y("android"), vt = y("android 2") || y("android 3"), yt = parseInt(/WebKit\/([0-9]+)|$/.exec(navigator.userAgent)[1], 10), yt = gt && y("Google") && yt < 537 && !("AudioNode" in window), xt = !!window.opera, wt = !n7 && y("chrome"), bt = y("gecko") && !ft && !xt && !pt, Pt = !wt && y("safari"), Lt = y("phantom"), o6 = "OTransition" in _t, Tt = 0 === navigator.platform.indexOf("Win"), Mt = pt && "transition" in _t, zt = "WebKitCSSMatrix" in window && "m11" in new window.WebKitCSSMatrix && !vt, _t = "MozPerspective" in _t, Ct = !window.L_DISABLE_3D && (Mt || zt || _t) && !o6 && !Lt, Zt = "undefined" != typeof orientation || y("mobile"), St = Zt && ft, Et = Zt && zt, kt = !window.PointerEvent && window.MSPointerEvent, Ot = !(!window.PointerEvent && !kt), At = "ontouchstart" in window || !!window.TouchEvent, Bt = !window.L_NO_TOUCH && (At || Ot), It = Zt && xt, Rt = Zt && bt, Nt = 1 < (window.devicePixelRatio || window.screen.deviceXDPI / window.screen.logicalXDPI), Dt = function() {
         var t1 = !1;
         try {
-            var i1 = Object.defineProperty({
+            var e3 = Object.defineProperty({
             }, "passive", {
                 get: function() {
                     t1 = !0;
                 }
             });
-            window.addEventListener("testPassiveEventSupport", a, i1), window.removeEventListener("testPassiveEventSupport", a, i1);
+            window.addEventListener("testPassiveEventSupport", u, e3), window.removeEventListener("testPassiveEventSupport", u, e3);
         } catch (t3) {
         }
         return t1;
-    }(), St = !!document.createElement("canvas").getContext, Zt = !(!document.createElementNS || !J("svg").createSVGRect), Et = !Zt && function() {
-        try {
-            var t1 = document.createElement("div");
-            t1.innerHTML = '<v:shape adj="1"/>';
-            var i1 = t1.firstChild;
-            return i1.style.behavior = "url(#default#VML)", i1 && "object" == typeof i1.adj;
-        } catch (t3) {
-            return !1;
-        }
-    }();
-    function kt(t1) {
+    }(), jt = !!document.createElement("canvas").getContext, Ht = !(!document.createElementNS || !ct("svg").createSVGRect), Wt = !!Ht && ((Wt = document.createElement("div")).innerHTML = "<svg/>", "http://www.w3.org/2000/svg" === (Wt.firstChild && Wt.firstChild.namespaceURI));
+    function y(t1) {
         return 0 <= navigator.userAgent.toLowerCase().indexOf(t1);
     }
-    var Bt = {
-        ie: tt,
-        ielt9: it,
-        edge: et,
-        webkit: nt,
-        android: ot,
-        android23: st,
-        androidStock: at,
-        opera: ht,
-        chrome: ut,
-        gecko: lt,
-        safari: ct,
-        phantom: _t,
-        opera12: dt,
-        win: pt,
-        ie3d: mt,
-        webkit3d: ft,
-        gecko3d: gt,
-        any3d: vt,
-        mobile: yt,
-        mobileWebkit: xt,
-        mobileWebkit3d: wt,
-        msPointer: Pt,
-        pointer: Lt,
-        touch: bt,
-        mobileOpera: Tt,
-        mobileGecko: Mt,
-        retina: zt,
-        passiveEvents: Ct,
-        canvas: St,
-        svg: Zt,
-        vml: Et
-    }, At = Pt ? "MSPointerDown" : "pointerdown", It = Pt ? "MSPointerMove" : "pointermove", Ot = Pt ? "MSPointerUp" : "pointerup", Rt = Pt ? "MSPointerCancel" : "pointercancel", Nt = {
-    }, Dt = !1;
-    function jt(t1, i1, e1, n3) {
-        function o3(t3) {
-            Ut(t3, r4);
+    var b = {
+        ie: pt,
+        ielt9: mt,
+        edge: n7,
+        webkit: ft,
+        android: gt,
+        android23: vt,
+        androidStock: yt,
+        opera: xt,
+        chrome: wt,
+        gecko: bt,
+        safari: Pt,
+        phantom: Lt,
+        opera12: o6,
+        win: Tt,
+        ie3d: Mt,
+        webkit3d: zt,
+        gecko3d: _t,
+        any3d: Ct,
+        mobile: Zt,
+        mobileWebkit: St,
+        mobileWebkit3d: Et,
+        msPointer: kt,
+        pointer: Ot,
+        touch: Bt,
+        touchNative: At,
+        mobileOpera: It,
+        mobileGecko: Rt,
+        retina: Nt,
+        passiveEvents: Dt,
+        canvas: jt,
+        svg: Ht,
+        vml: !Ht && function() {
+            try {
+                var t1 = document.createElement("div"), e3 = (t1.innerHTML = '<v:shape adj="1"/>', t1.firstChild);
+                return e3.style.behavior = "url(#default#VML)", e3 && "object" == typeof e3.adj;
+            } catch (t3) {
+                return !1;
+            }
+        }(),
+        inlineSvg: Wt,
+        mac: 0 === navigator.platform.indexOf("Mac"),
+        linux: 0 === navigator.platform.indexOf("Linux")
+    }, Ft = b.msPointer ? "MSPointerDown" : "pointerdown", Ut = b.msPointer ? "MSPointerMove" : "pointermove", Vt = b.msPointer ? "MSPointerUp" : "pointerup", qt = b.msPointer ? "MSPointerCancel" : "pointercancel", Gt = {
+        touchstart: Ft,
+        touchmove: Ut,
+        touchend: Vt,
+        touchcancel: qt
+    }, Kt = {
+        touchstart: function(t1, e3) {
+            e3.MSPOINTER_TYPE_TOUCH && e3.pointerType === e3.MSPOINTER_TYPE_TOUCH && O(e3);
+            ee(t1, e3);
+        },
+        touchmove: ee,
+        touchend: ee,
+        touchcancel: ee
+    }, Yt = {
+    }, Xt = !1;
+    function Jt(t1, e3, i1) {
+        return "touchstart" !== e3 || Xt || (document.addEventListener(Ft, $t, !0), document.addEventListener(Ut, Qt, !0), document.addEventListener(Vt, te, !0), document.addEventListener(qt, te, !0), Xt = !0), Kt[e3] ? (i1 = Kt[e3].bind(this, i1), t1.addEventListener(Gt[e3], i1, !1), i1) : (console.warn("wrong event specified:", e3), u);
+    }
+    function $t(t1) {
+        Yt[t1.pointerId] = t1;
+    }
+    function Qt(t1) {
+        Yt[t1.pointerId] && (Yt[t1.pointerId] = t1);
+    }
+    function te(t1) {
+        delete Yt[t1.pointerId];
+    }
+    function ee(t1, e3) {
+        if (e3.pointerType !== (e3.MSPOINTER_TYPE_MOUSE || "mouse")) {
+            for(var i1 in e3.touches = [], Yt)e3.touches.push(Yt[i1]);
+            e3.changedTouches = [
+                e3
+            ], t1(e3);
         }
-        var s3, r4, a2, h1, u1, l1, c1, _1;
-        function d1(t3) {
-            t3.pointerType === (t3.MSPOINTER_TYPE_MOUSE || "mouse") && 0 === t3.buttons || Ut(t3, h1);
+    }
+    var ie = 200;
+    function ne(t1, i2) {
+        t1.addEventListener("dblclick", i2);
+        var n1, o1 = 0;
+        function e3(t3) {
+            var e4;
+            1 !== t3.detail ? n1 = t3.detail : "mouse" === t3.pointerType || t3.sourceCapabilities && !t3.sourceCapabilities.firesTouchEvents || (e4 = Ne(t3)).some(function(t4) {
+                return t4 instanceof HTMLLabelElement && t4.attributes.for;
+            }) && !e4.some(function(t4) {
+                return t4 instanceof HTMLInputElement || t4 instanceof HTMLSelectElement;
+            }) || ((e4 = Date.now()) - o1 <= ie ? 2 === ++n1 && i2(function(t4) {
+                var e5, i3, n2 = {
+                };
+                for(i3 in t4)e5 = t4[i3], n2[i3] = e5 && e5.bind ? e5.bind(t4) : e5;
+                return (t4 = n2).type = "dblclick", n2.detail = 2, n2.isTrusted = !1, n2._simulated = !0, n2;
+            }(t3)) : n1 = 1, o1 = e4);
         }
-        return "touchstart" === i1 ? (u1 = t1, l1 = e1, c1 = n3, _1 = p(function(t3) {
-            t3.MSPOINTER_TYPE_TOUCH && t3.pointerType === t3.MSPOINTER_TYPE_TOUCH && Ri(t3), Ut(t3, l1);
-        }), u1["_leaflet_touchstart" + c1] = _1, u1.addEventListener(At, _1, !1), Dt || (document.addEventListener(At, Wt, !0), document.addEventListener(It, Ht, !0), document.addEventListener(Ot, Ft, !0), document.addEventListener(Rt, Ft, !0), Dt = !0)) : "touchmove" === i1 ? (h1 = e1, (a2 = t1)["_leaflet_touchmove" + n3] = d1, a2.addEventListener(It, d1, !1)) : "touchend" === i1 && (r4 = e1, (s3 = t1)["_leaflet_touchend" + n3] = o3, s3.addEventListener(Ot, o3, !1), s3.addEventListener(Rt, o3, !1)), this;
+        return t1.addEventListener("click", e3), {
+            dblclick: i2,
+            simDblclick: e3
+        };
     }
-    function Wt(t1) {
-        Nt[t1.pointerId] = t1;
-    }
-    function Ht(t1) {
-        Nt[t1.pointerId] && (Nt[t1.pointerId] = t1);
-    }
-    function Ft(t1) {
-        delete Nt[t1.pointerId];
-    }
-    function Ut(t1, i1) {
-        for(var e1 in t1.touches = [], Nt)t1.touches.push(Nt[e1]);
-        t1.changedTouches = [
-            t1
-        ], i1(t1);
-    }
-    var Vt = Pt ? "MSPointerDown" : Lt ? "pointerdown" : "touchstart", qt = Pt ? "MSPointerUp" : Lt ? "pointerup" : "touchend", Gt = "_leaflet_";
-    var Kt, Yt, Xt, Jt, $t, Qt, ti = fi([
+    var oe, se, re, ae, he, le, ue = we([
         "transform",
         "webkitTransform",
         "OTransform",
         "MozTransform",
         "msTransform"
-    ]), ii = fi([
+    ]), ce = we([
         "webkitTransition",
         "transition",
         "OTransition",
         "MozTransition",
         "msTransition"
-    ]), ei = "webkitTransition" === ii || "OTransition" === ii ? ii + "End" : "transitionend";
-    function ni(t1) {
+    ]), de = "webkitTransition" === ce || "OTransition" === ce ? ce + "End" : "transitionend";
+    function _e(t1) {
         return "string" == typeof t1 ? document.getElementById(t1) : t1;
     }
-    function oi(t1, i1) {
-        var e1, n3 = t1.style[i1] || t1.currentStyle && t1.currentStyle[i1];
-        return n3 && "auto" !== n3 || !document.defaultView || (n3 = (e1 = document.defaultView.getComputedStyle(t1, null)) ? e1[i1] : null), "auto" === n3 ? null : n3;
+    function pe(t1, e3) {
+        var i2 = t1.style[e3] || t1.currentStyle && t1.currentStyle[e3];
+        return "auto" === (i2 = i2 && "auto" !== i2 || !document.defaultView ? i2 : (t1 = document.defaultView.getComputedStyle(t1, null)) ? t1[e3] : null) ? null : i2;
     }
-    function si(t1, i1, e1) {
-        var n3 = document.createElement(t1);
-        return n3.className = i1 || "", e1 && e1.appendChild(n3), n3;
+    function P(t1, e3, i2) {
+        t1 = document.createElement(t1);
+        return t1.className = e3 || "", i2 && i2.appendChild(t1), t1;
     }
-    function ri(t1) {
-        var i1 = t1.parentNode;
-        i1 && i1.removeChild(t1);
+    function T(t1) {
+        var e3 = t1.parentNode;
+        e3 && e3.removeChild(t1);
     }
-    function ai(t1) {
+    function me(t1) {
         for(; t1.firstChild;)t1.removeChild(t1.firstChild);
     }
-    function hi(t1) {
-        var i1 = t1.parentNode;
-        i1 && i1.lastChild !== t1 && i1.appendChild(t1);
+    function fe(t1) {
+        var e3 = t1.parentNode;
+        e3 && e3.lastChild !== t1 && e3.appendChild(t1);
     }
-    function ui(t1) {
-        var i1 = t1.parentNode;
-        i1 && i1.firstChild !== t1 && i1.insertBefore(t1, i1.firstChild);
+    function ge(t1) {
+        var e3 = t1.parentNode;
+        e3 && e3.firstChild !== t1 && e3.insertBefore(t1, e3.firstChild);
     }
-    function li(t1, i1) {
-        if ((void 0) !== t1.classList) return t1.classList.contains(i1);
-        var e1 = pi(t1);
-        return 0 < e1.length && new RegExp("(^|\\s)" + i1 + "(\\s|$)").test(e1);
+    function ve(t1, e3) {
+        return (void 0) !== t1.classList ? t1.classList.contains(e3) : 0 < (t1 = xe(t1)).length && new RegExp("(^|\\s)" + e3 + "(\\s|$)").test(t1);
     }
-    function ci(t1, i1) {
-        var e1;
-        if ((void 0) !== t1.classList) for(var n3 = l(i1), o3 = 0, s3 = n3.length; o3 < s3; o3++)t1.classList.add(n3[o3]);
-        else li(t1, i1) || di(t1, ((e1 = pi(t1)) ? e1 + " " : "") + i1);
+    function M(t1, e3) {
+        var i2;
+        if ((void 0) !== t1.classList) for(var n1 = F(e3), o1 = 0, s1 = n1.length; o1 < s1; o1++)t1.classList.add(n1[o1]);
+        else ve(t1, e3) || ye(t1, ((i2 = xe(t1)) ? i2 + " " : "") + e3);
     }
-    function _i(t1, i1) {
-        (void 0) !== t1.classList ? t1.classList.remove(i1) : di(t1, u((" " + pi(t1) + " ").replace(" " + i1 + " ", " ")));
+    function z(t1, e3) {
+        (void 0) !== t1.classList ? t1.classList.remove(e3) : ye(t1, W((" " + xe(t1) + " ").replace(" " + e3 + " ", " ")));
     }
-    function di(t1, i1) {
-        (void 0) === t1.className.baseVal ? t1.className = i1 : t1.className.baseVal = i1;
+    function ye(t1, e3) {
+        (void 0) === t1.className.baseVal ? t1.className = e3 : t1.className.baseVal = e3;
     }
-    function pi(t1) {
-        return t1.correspondingElement && (t1 = t1.correspondingElement), (void 0) === t1.className.baseVal ? t1.className : t1.className.baseVal;
+    function xe(t1) {
+        return (void 0) === (t1 = t1.correspondingElement ? t1.correspondingElement : t1).className.baseVal ? t1.className : t1.className.baseVal;
     }
-    function mi(t1, i1) {
-        "opacity" in t1.style ? t1.style.opacity = i1 : "filter" in t1.style && (function(t3, i3) {
-            var e1 = !1, n3 = "DXImageTransform.Microsoft.Alpha";
+    function C(t1, e3) {
+        if ("opacity" in t1.style) t1.style.opacity = e3;
+        else if ("filter" in t1.style) {
+            var i2 = !1, n1 = "DXImageTransform.Microsoft.Alpha";
             try {
-                e1 = t3.filters.item(n3);
-            } catch (t4) {
-                if (1 === i3) return;
+                i2 = t1.filters.item(n1);
+            } catch (t3) {
+                if (1 === e3) return;
             }
-            i3 = Math.round(100 * i3), e1 ? (e1.Enabled = 100 !== i3, e1.Opacity = i3) : t3.style.filter += " progid:" + n3 + "(opacity=" + i3 + ")";
-        })(t1, i1);
+            e3 = Math.round(100 * e3), i2 ? (i2.Enabled = 100 !== e3, i2.Opacity = e3) : t1.style.filter += " progid:" + n1 + "(opacity=" + e3 + ")";
+        }
     }
-    function fi(t1) {
-        for(var i1 = document.documentElement.style, e1 = 0; e1 < t1.length; e1++)if (t1[e1] in i1) return t1[e1];
+    function we(t1) {
+        for(var e3 = document.documentElement.style, i3 = 0; i3 < t1.length; i3++)if (t1[i3] in e3) return t1[i3];
         return !1;
     }
-    function gi(t1, i1, e1) {
-        var n3 = i1 || new k(0, 0);
-        t1.style[ti] = (mt ? "translate(" + n3.x + "px," + n3.y + "px)" : "translate3d(" + n3.x + "px," + n3.y + "px,0)") + (e1 ? " scale(" + e1 + ")" : "");
+    function be(t1, e3, i3) {
+        e3 = e3 || new p(0, 0);
+        t1.style[ue] = (b.ie3d ? "translate(" + e3.x + "px," + e3.y + "px)" : "translate3d(" + e3.x + "px," + e3.y + "px,0)") + (i3 ? " scale(" + i3 + ")" : "");
     }
-    function vi(t1, i1) {
-        t1._leaflet_pos = i1, vt ? gi(t1, i1) : (t1.style.left = i1.x + "px", t1.style.top = i1.y + "px");
+    function Z(t1, e3) {
+        t1._leaflet_pos = e3, b.any3d ? be(t1, e3) : (t1.style.left = e3.x + "px", t1.style.top = e3.y + "px");
     }
-    function yi(t1) {
-        return t1._leaflet_pos || new k(0, 0);
+    function Pe(t1) {
+        return t1._leaflet_pos || new p(0, 0);
     }
-    function xi() {
-        zi(window, "dragstart", Ri);
+    function Le() {
+        S(window, "dragstart", O);
     }
-    function wi() {
-        Si(window, "dragstart", Ri);
+    function Te() {
+        k(window, "dragstart", O);
     }
-    function Pi(t1) {
+    function Me(t1) {
         for(; -1 === t1.tabIndex;)t1 = t1.parentNode;
-        t1.style && (Li(), Qt = ($t = t1).style.outline, t1.style.outline = "none", zi(window, "keydown", Li));
+        t1.style && (ze(), le = (he = t1).style.outlineStyle, t1.style.outlineStyle = "none", S(window, "keydown", ze));
     }
-    function Li() {
-        $t && ($t.style.outline = Qt, Qt = $t = void 0, Si(window, "keydown", Li));
+    function ze() {
+        he && (he.style.outlineStyle = le, le = he = void 0, k(window, "keydown", ze));
     }
-    function bi(t1) {
+    function Ce(t1) {
         for(; !((t1 = t1.parentNode).offsetWidth && t1.offsetHeight || t1 === document.body););
         return t1;
     }
-    function Ti(t1) {
-        var i1 = t1.getBoundingClientRect();
+    function Ze(t1) {
+        var e3 = t1.getBoundingClientRect();
         return {
-            x: i1.width / t1.offsetWidth || 1,
-            y: i1.height / t1.offsetHeight || 1,
-            boundingClientRect: i1
+            x: e3.width / t1.offsetWidth || 1,
+            y: e3.height / t1.offsetHeight || 1,
+            boundingClientRect: e3
         };
     }
-    Jt = "onselectstart" in document ? (Xt = function() {
-        zi(window, "selectstart", Ri);
+    ae = "onselectstart" in document ? (re = function() {
+        S(window, "selectstart", O);
     }, function() {
-        Si(window, "selectstart", Ri);
-    }) : (Yt = fi([
+        k(window, "selectstart", O);
+    }) : (se = we([
         "userSelect",
         "WebkitUserSelect",
         "OUserSelect",
         "MozUserSelect",
         "msUserSelect"
-    ]), Xt = function() {
+    ]), re = function() {
         var t1;
-        Yt && (t1 = document.documentElement.style, Kt = t1[Yt], t1[Yt] = "none");
+        se && (t1 = document.documentElement.style, oe = t1[se], t1[se] = "none");
     }, function() {
-        Yt && (document.documentElement.style[Yt] = Kt, Kt = void 0);
+        se && (document.documentElement.style[se] = oe, oe = void 0);
     });
-    var Mi = {
-        TRANSFORM: ti,
-        TRANSITION: ii,
-        TRANSITION_END: ei,
-        get: ni,
-        getStyle: oi,
-        create: si,
-        remove: ri,
-        empty: ai,
-        toFront: hi,
-        toBack: ui,
-        hasClass: li,
-        addClass: ci,
-        removeClass: _i,
-        setClass: di,
-        getClass: pi,
-        setOpacity: mi,
-        testProp: fi,
-        setTransform: gi,
-        setPosition: vi,
-        getPosition: yi,
-        disableTextSelection: Xt,
-        enableTextSelection: Jt,
-        disableImageDrag: xi,
-        enableImageDrag: wi,
-        preventOutline: Pi,
-        restoreOutline: Li,
-        getSizedParentNode: bi,
-        getScale: Ti
+    pt = {
+        __proto__: null,
+        TRANSFORM: ue,
+        TRANSITION: ce,
+        TRANSITION_END: de,
+        get: _e,
+        getStyle: pe,
+        create: P,
+        remove: T,
+        empty: me,
+        toFront: fe,
+        toBack: ge,
+        hasClass: ve,
+        addClass: M,
+        removeClass: z,
+        setClass: ye,
+        getClass: xe,
+        setOpacity: C,
+        testProp: we,
+        setTransform: be,
+        setPosition: Z,
+        getPosition: Pe,
+        get disableTextSelection () {
+            return re;
+        },
+        get enableTextSelection () {
+            return ae;
+        },
+        disableImageDrag: Le,
+        enableImageDrag: Te,
+        preventOutline: Me,
+        restoreOutline: ze,
+        getSizedParentNode: Ce,
+        getScale: Ze
     };
-    function zi(t1, i1, e1, n3) {
-        if ("object" == typeof i1) for(var o3 in i1)ki(t1, o3, i1[o3], e1);
-        else for(var s3 = 0, r4 = (i1 = l(i1)).length; s3 < r4; s3++)ki(t1, i1[s3], e1, n3);
+    function S(t1, e3, i3, n2) {
+        if (e3 && "object" == typeof e3) for(var o1 in e3)ke(t1, o1, e3[o1], i3);
+        else for(var s1 = 0, r4 = (e3 = F(e3)).length; s1 < r4; s1++)ke(t1, e3[s1], i3, n2);
         return this;
     }
-    var Ci = "_leaflet_events";
-    function Si(t1, i1, e1, n3) {
-        if ("object" == typeof i1) for(var o3 in i1)Bi(t1, o3, i1[o3], e1);
-        else if (i1) for(var s3 = 0, r4 = (i1 = l(i1)).length; s3 < r4; s3++)Bi(t1, i1[s3], e1, n3);
-        else {
-            for(var a2 in t1[Ci])Bi(t1, a2, t1[Ci][a2]);
-            delete t1[Ci];
+    var E = "_leaflet_events";
+    function k(t1, e3, i3, n2) {
+        if (1 === arguments.length) Se(t1), delete t1[E];
+        else if (e3 && "object" == typeof e3) for(var o1 in e3)Oe(t1, o1, e3[o1], i3);
+        else if (e3 = F(e3), 2 === arguments.length) Se(t1, function(t3) {
+            return -1 !== G(e3, t3);
+        });
+        else for(var s1 = 0, r4 = e3.length; s1 < r4; s1++)Oe(t1, e3[s1], i3, n2);
+        return this;
+    }
+    function Se(t1, e3) {
+        for(var i3 in t1[E]){
+            var n2 = i3.split(/\d/)[0];
+            e3 && !e3(n2) || Oe(t1, n2, null, null, i3);
         }
-        return this;
     }
-    function Zi() {
-        return Lt && !et && !ct;
-    }
-    var Ei = {
+    var Ee = {
         mouseenter: "mouseover",
         mouseleave: "mouseout",
         wheel: !("onwheel" in window) && "mousewheel"
     };
-    function ki(i1, t1, e1, n3) {
-        var o3 = t1 + m(e1) + (n3 ? "_" + m(n3) : "");
-        if (i1[Ci] && i1[Ci][o3]) return this;
-        var s3, r4, a3, h1, u1, l1, c1 = function(t3) {
-            return e1.call(n3 || i1, t3 || window.event);
-        }, _1 = c1;
-        function d1(t3) {
-            if (Lt) {
-                if (!t3.isPrimary) return;
-                if ("mouse" === t3.pointerType) return;
-            } else if (1 < t3.touches.length) return;
-            var i3 = Date.now(), e2 = i3 - (h1 || i3);
-            u1 = t3.touches ? t3.touches[0] : t3, l1 = 0 < e2 && e2 <= 250, h1 = i3;
-        }
-        function p1(t3) {
-            if (l1 && !u1.cancelBubble) {
-                if (Lt) {
-                    if ("mouse" === t3.pointerType) return;
-                    var i3, e2, n4 = {
-                    };
-                    for(e2 in u1)i3 = u1[e2], n4[e2] = i3 && i3.bind ? i3.bind(u1) : i3;
-                    u1 = n4;
-                }
-                u1.type = "dblclick", u1.button = 0, r4(u1), h1 = null;
-            }
-        }
-        Lt && 0 === t1.indexOf("touch") ? jt(i1, t1, c1, o3) : bt && "dblclick" === t1 && !Zi() ? (r4 = c1, l1 = !1, (s3 = i1)[Gt + Vt + (a3 = o3)] = d1, s3[Gt + qt + a3] = p1, s3[Gt + "dblclick" + a3] = r4, s3.addEventListener(Vt, d1, !!Ct && {
+    function ke(e3, t1, i3, n3) {
+        var o1, s1, r4 = t1 + h(i3) + (n3 ? "_" + h(n3) : "");
+        e3[E] && e3[E][r4] || (s1 = o1 = function(t3) {
+            return i3.call(n3 || e3, t3 || window.event);
+        }, !b.touchNative && b.pointer && 0 === t1.indexOf("touch") ? o1 = Jt(e3, t1, o1) : b.touch && "dblclick" === t1 ? o1 = ne(e3, o1) : "addEventListener" in e3 ? "touchstart" === t1 || "touchmove" === t1 || "wheel" === t1 || "mousewheel" === t1 ? e3.addEventListener(Ee[t1] || t1, o1, !!b.passiveEvents && {
             passive: !1
-        }), s3.addEventListener(qt, p1, !!Ct && {
-            passive: !1
-        }), s3.addEventListener("dblclick", r4, !1)) : "addEventListener" in i1 ? "touchstart" === t1 || "touchmove" === t1 || "wheel" === t1 || "mousewheel" === t1 ? i1.addEventListener(Ei[t1] || t1, c1, !!Ct && {
-            passive: !1
-        }) : "mouseenter" === t1 || "mouseleave" === t1 ? (c1 = function(t3) {
-            t3 = t3 || window.event, Vi(i1, t3) && _1(t3);
-        }, i1.addEventListener(Ei[t1], c1, !1)) : i1.addEventListener(t1, _1, !1) : "attachEvent" in i1 && i1.attachEvent("on" + t1, c1), i1[Ci] = i1[Ci] || {
-        }, i1[Ci][o3] = c1;
+        }) : "mouseenter" === t1 || "mouseleave" === t1 ? e3.addEventListener(Ee[t1], o1 = function(t3) {
+            t3 = t3 || window.event, We(e3, t3) && s1(t3);
+        }, !1) : e3.addEventListener(t1, s1, !1) : e3.attachEvent("on" + t1, o1), e3[E] = e3[E] || {
+        }, e3[E][r4] = o1);
     }
-    function Bi(t1, i1, e1, n3) {
-        var o3, s3, r4, a3, h1, u1, l1, c1, _1 = i1 + m(e1) + (n3 ? "_" + m(n3) : ""), d1 = t1[Ci] && t1[Ci][_1];
-        if (!d1) return this;
-        Lt && 0 === i1.indexOf("touch") ? (c1 = (u1 = t1)["_leaflet_" + (l1 = i1) + _1], "touchstart" === l1 ? u1.removeEventListener(At, c1, !1) : "touchmove" === l1 ? u1.removeEventListener(It, c1, !1) : "touchend" === l1 && (u1.removeEventListener(Ot, c1, !1), u1.removeEventListener(Rt, c1, !1))) : bt && "dblclick" === i1 && !Zi() ? (r4 = (o3 = t1)[Gt + Vt + (s3 = _1)], a3 = o3[Gt + qt + s3], h1 = o3[Gt + "dblclick" + s3], o3.removeEventListener(Vt, r4, !!Ct && {
-            passive: !1
-        }), o3.removeEventListener(qt, a3, !!Ct && {
-            passive: !1
-        }), o3.removeEventListener("dblclick", h1, !1)) : "removeEventListener" in t1 ? t1.removeEventListener(Ei[i1] || i1, d1, !1) : "detachEvent" in t1 && t1.detachEvent("on" + i1, d1), t1[Ci][_1] = null;
+    function Oe(t1, e3, i3, n3, o1) {
+        o1 = o1 || e3 + h(i3) + (n3 ? "_" + h(n3) : "");
+        var s1, r4, i3 = t1[E] && t1[E][o1];
+        i3 && (!b.touchNative && b.pointer && 0 === e3.indexOf("touch") ? (n3 = t1, r4 = i3, Gt[s1 = e3] ? n3.removeEventListener(Gt[s1], r4, !1) : console.warn("wrong event specified:", s1)) : b.touch && "dblclick" === e3 ? (n3 = i3, (r4 = t1).removeEventListener("dblclick", n3.dblclick), r4.removeEventListener("click", n3.simDblclick)) : "removeEventListener" in t1 ? t1.removeEventListener(Ee[e3] || e3, i3, !1) : t1.detachEvent("on" + e3, i3), t1[E][o1] = null);
     }
-    function Ai(t1) {
-        return t1.stopPropagation ? t1.stopPropagation() : t1.originalEvent ? t1.originalEvent._stopped = !0 : t1.cancelBubble = !0, Ui(t1), this;
+    function Ae(t1) {
+        return t1.stopPropagation ? t1.stopPropagation() : t1.originalEvent ? t1.originalEvent._stopped = !0 : t1.cancelBubble = !0, this;
     }
-    function Ii(t1) {
-        return ki(t1, "wheel", Ai), this;
+    function Be(t1) {
+        return ke(t1, "wheel", Ae), this;
     }
-    function Oi(t1) {
-        return zi(t1, "mousedown touchstart dblclick", Ai), ki(t1, "click", Fi), this;
+    function Ie(t1) {
+        return S(t1, "mousedown touchstart dblclick contextmenu", Ae), t1._leaflet_disable_click = !0, this;
     }
-    function Ri(t1) {
+    function O(t1) {
         return t1.preventDefault ? t1.preventDefault() : t1.returnValue = !1, this;
     }
-    function Ni(t1) {
-        return Ri(t1), Ai(t1), this;
+    function Re(t1) {
+        return O(t1), Ae(t1), this;
     }
-    function Di(t1, i1) {
-        if (!i1) return new k(t1.clientX, t1.clientY);
-        var e1 = Ti(i1), n3 = e1.boundingClientRect;
-        return new k((t1.clientX - n3.left) / e1.x - i1.clientLeft, (t1.clientY - n3.top) / e1.y - i1.clientTop);
+    function Ne(t1) {
+        if (t1.composedPath) return t1.composedPath();
+        for(var e3 = [], i3 = t1.target; i3;)e3.push(i3), i3 = i3.parentNode;
+        return e3;
     }
-    var ji = pt && ut ? 2 * window.devicePixelRatio : lt ? window.devicePixelRatio : 1;
-    function Wi(t1) {
-        return et ? t1.wheelDeltaY / 2 : t1.deltaY && 0 === t1.deltaMode ? -t1.deltaY / ji : t1.deltaY && 1 === t1.deltaMode ? 20 * -t1.deltaY : t1.deltaY && 2 === t1.deltaMode ? 60 * -t1.deltaY : t1.deltaX || t1.deltaZ ? 0 : t1.wheelDelta ? (t1.wheelDeltaY || t1.wheelDelta) / 2 : t1.detail && Math.abs(t1.detail) < 32765 ? 20 * -t1.detail : t1.detail ? t1.detail / -32765 * 60 : 0;
+    function De(t1, e3) {
+        var i3, n3;
+        return e3 ? (n3 = (i3 = Ze(e3)).boundingClientRect, new p((t1.clientX - n3.left) / i3.x - e3.clientLeft, (t1.clientY - n3.top) / i3.y - e3.clientTop)) : new p(t1.clientX, t1.clientY);
     }
-    var Hi = {
-    };
-    function Fi(t1) {
-        Hi[t1.type] = !0;
+    var je = b.linux && b.chrome ? window.devicePixelRatio : b.mac ? 3 * window.devicePixelRatio : 0 < window.devicePixelRatio ? 2 * window.devicePixelRatio : 1;
+    function He(t1) {
+        return b.edge ? t1.wheelDeltaY / 2 : t1.deltaY && 0 === t1.deltaMode ? -t1.deltaY / je : t1.deltaY && 1 === t1.deltaMode ? 20 * -t1.deltaY : t1.deltaY && 2 === t1.deltaMode ? 60 * -t1.deltaY : t1.deltaX || t1.deltaZ ? 0 : t1.wheelDelta ? (t1.wheelDeltaY || t1.wheelDelta) / 2 : t1.detail && Math.abs(t1.detail) < 32765 ? 20 * -t1.detail : t1.detail ? t1.detail / -32765 * 60 : 0;
     }
-    function Ui(t1) {
-        var i1 = Hi[t1.type];
-        return Hi[t1.type] = !1, i1;
-    }
-    function Vi(t1, i1) {
-        var e1 = i1.relatedTarget;
-        if (!e1) return !0;
+    function We(t1, e3) {
+        var i3 = e3.relatedTarget;
+        if (!i3) return !0;
         try {
-            for(; e1 && e1 !== t1;)e1 = e1.parentNode;
+            for(; i3 && i3 !== t1;)i3 = i3.parentNode;
         } catch (t3) {
             return !1;
         }
-        return e1 !== t1;
+        return i3 !== t1;
     }
-    var qi = {
-        on: zi,
-        off: Si,
-        stopPropagation: Ai,
-        disableScrollPropagation: Ii,
-        disableClickPropagation: Oi,
-        preventDefault: Ri,
-        stop: Ni,
-        getMousePosition: Di,
-        getWheelDelta: Wi,
-        fakeStop: Fi,
-        skipped: Ui,
-        isExternalTarget: Vi,
-        addListener: zi,
-        removeListener: Si
-    }, Gi = E.extend({
-        run: function(t1, i1, e1, n3) {
-            this.stop(), this._el = t1, this._inProgress = !0, this._duration = e1 || 0.25, this._easeOutPower = 1 / Math.max(n3 || 0.5, 0.2), this._startPos = yi(t1), this._offset = i1.subtract(this._startPos), this._startTime = +new Date, this.fire("start"), this._animate();
+    var mt = {
+        __proto__: null,
+        on: S,
+        off: k,
+        stopPropagation: Ae,
+        disableScrollPropagation: Be,
+        disableClickPropagation: Ie,
+        preventDefault: O,
+        stop: Re,
+        getPropagationPath: Ne,
+        getMousePosition: De,
+        getWheelDelta: He,
+        isExternalTarget: We,
+        addListener: S,
+        removeListener: k
+    }, Fe = it.extend({
+        run: function(t1, e3, i3, n3) {
+            this.stop(), this._el = t1, this._inProgress = !0, this._duration = i3 || 0.25, this._easeOutPower = 1 / Math.max(n3 || 0.5, 0.2), this._startPos = Pe(t1), this._offset = e3.subtract(this._startPos), this._startTime = +new Date, this.fire("start"), this._animate();
         },
         stop: function() {
             this._inProgress && (this._step(!0), this._complete());
         },
         _animate: function() {
-            this._animId = M(this._animate, this), this._step();
+            this._animId = x(this._animate, this), this._step();
         },
         _step: function(t1) {
-            var i1 = new Date - this._startTime, e1 = 1000 * this._duration;
-            i1 < e1 ? this._runFrame(this._easeOut(i1 / e1), t1) : (this._runFrame(1), this._complete());
+            var e3 = +new Date - this._startTime, i3 = 1000 * this._duration;
+            e3 < i3 ? this._runFrame(this._easeOut(e3 / i3), t1) : (this._runFrame(1), this._complete());
         },
-        _runFrame: function(t1, i1) {
-            var e1 = this._startPos.add(this._offset.multiplyBy(t1));
-            i1 && e1._round(), vi(this._el, e1), this.fire("step");
+        _runFrame: function(t1, e3) {
+            t1 = this._startPos.add(this._offset.multiplyBy(t1));
+            e3 && t1._round(), Z(this._el, t1), this.fire("step");
         },
         _complete: function() {
-            z(this._animId), this._inProgress = !1, this.fire("end");
+            r(this._animId), this._inProgress = !1, this.fire("end");
         },
         _easeOut: function(t1) {
             return 1 - Math.pow(1 - t1, this._easeOutPower);
         }
-    }), Ki = E.extend({
+    }), A = it.extend({
         options: {
-            crs: Y,
+            crs: lt,
             center: void 0,
             zoom: void 0,
             minZoom: void 0,
@@ -1727,64 +1774,61 @@ function fitBoundsPadding(e) {
             zoomDelta: 1,
             trackResize: !0
         },
-        initialize: function(t1, i1) {
-            i1 = c(this, i1), this._handlers = [], this._layers = {
+        initialize: function(t1, e3) {
+            e3 = c(this, e3), this._handlers = [], this._layers = {
             }, this._zoomBoundLayers = {
-            }, this._sizeChanged = !0, this._initContainer(t1), this._initLayout(), this._onResize = p(this._onResize, this), this._initEvents(), i1.maxBounds && this.setMaxBounds(i1.maxBounds), (void 0) !== i1.zoom && (this._zoom = this._limitZoom(i1.zoom)), i1.center && (void 0) !== i1.zoom && this.setView(j(i1.center), i1.zoom, {
+            }, this._sizeChanged = !0, this._initContainer(t1), this._initLayout(), this._onResize = a2(this._onResize, this), this._initEvents(), e3.maxBounds && this.setMaxBounds(e3.maxBounds), (void 0) !== e3.zoom && (this._zoom = this._limitZoom(e3.zoom)), e3.center && (void 0) !== e3.zoom && this.setView(w(e3.center), e3.zoom, {
                 reset: !0
-            }), this.callInitHooks(), this._zoomAnimated = ii && vt && !Tt && this.options.zoomAnimation, this._zoomAnimated && (this._createAnimProxy(), zi(this._proxy, ei, this._catchTransitionEnd, this)), this._addLayers(this.options.layers);
+            }), this.callInitHooks(), this._zoomAnimated = ce && b.any3d && !b.mobileOpera && this.options.zoomAnimation, this._zoomAnimated && (this._createAnimProxy(), S(this._proxy, de, this._catchTransitionEnd, this)), this._addLayers(this.options.layers);
         },
-        setView: function(t1, i1, e1) {
-            if ((i1 = (void 0) === i1 ? this._zoom : this._limitZoom(i1), t1 = this._limitCenter(j(t1), i1, this.options.maxBounds), e1 = e1 || {
-            }, this._stop(), this._loaded && !e1.reset && !0 !== e1) && ((void 0) !== e1.animate && (e1.zoom = h({
-                animate: e1.animate
-            }, e1.zoom), e1.pan = h({
-                animate: e1.animate,
-                duration: e1.duration
-            }, e1.pan)), this._zoom !== i1 ? this._tryAnimatedZoom && this._tryAnimatedZoom(t1, i1, e1.zoom) : this._tryAnimatedPan(t1, e1.pan))) return clearTimeout(this._sizeTimer), this;
-            return this._resetView(t1, i1), this;
+        setView: function(t1, e3, i3) {
+            if ((e3 = (void 0) === e3 ? this._zoom : this._limitZoom(e3), t1 = this._limitCenter(w(t1), e3, this.options.maxBounds), i3 = i3 || {
+            }, this._stop(), this._loaded && !i3.reset && !0 !== i3) && ((void 0) !== i3.animate && (i3.zoom = l({
+                animate: i3.animate
+            }, i3.zoom), i3.pan = l({
+                animate: i3.animate,
+                duration: i3.duration
+            }, i3.pan)), this._zoom !== e3 ? this._tryAnimatedZoom && this._tryAnimatedZoom(t1, e3, i3.zoom) : this._tryAnimatedPan(t1, i3.pan))) return clearTimeout(this._sizeTimer), this;
+            return this._resetView(t1, e3, i3.pan && i3.pan.noMoveStart), this;
         },
-        setZoom: function(t1, i1) {
+        setZoom: function(t1, e3) {
             return this._loaded ? this.setView(this.getCenter(), t1, {
-                zoom: i1
+                zoom: e3
             }) : (this._zoom = t1, this);
         },
-        zoomIn: function(t1, i1) {
-            return t1 = t1 || (vt ? this.options.zoomDelta : 1), this.setZoom(this._zoom + t1, i1);
+        zoomIn: function(t1, e3) {
+            return t1 = t1 || (b.any3d ? this.options.zoomDelta : 1), this.setZoom(this._zoom + t1, e3);
         },
-        zoomOut: function(t1, i1) {
-            return t1 = t1 || (vt ? this.options.zoomDelta : 1), this.setZoom(this._zoom - t1, i1);
+        zoomOut: function(t1, e3) {
+            return t1 = t1 || (b.any3d ? this.options.zoomDelta : 1), this.setZoom(this._zoom - t1, e3);
         },
-        setZoomAround: function(t1, i1, e1) {
-            var n3 = this.getZoomScale(i1), o3 = this.getSize().divideBy(2), s3 = (t1 instanceof k ? t1 : this.latLngToContainerPoint(t1)).subtract(o3).multiplyBy(1 - 1 / n3), r4 = this.containerPointToLatLng(o3.add(s3));
-            return this.setView(r4, i1, {
-                zoom: e1
+        setZoomAround: function(t1, e3, i3) {
+            var n3 = this.getZoomScale(e3), o1 = this.getSize().divideBy(2), t1 = (t1 instanceof p ? t1 : this.latLngToContainerPoint(t1)).subtract(o1).multiplyBy(1 - 1 / n3), n3 = this.containerPointToLatLng(o1.add(t1));
+            return this.setView(n3, e3, {
+                zoom: i3
             });
         },
-        _getBoundsCenterZoom: function(t1, i1) {
-            i1 = i1 || {
-            }, t1 = t1.getBounds ? t1.getBounds() : N(t1);
-            var e1 = A(i1.paddingTopLeft || i1.padding || [
+        _getBoundsCenterZoom: function(t1, e3) {
+            e3 = e3 || {
+            }, t1 = t1.getBounds ? t1.getBounds() : g(t1);
+            var i3 = m(e3.paddingTopLeft || e3.padding || [
                 0,
                 0
-            ]), n3 = A(i1.paddingBottomRight || i1.padding || [
+            ]), n3 = m(e3.paddingBottomRight || e3.padding || [
                 0,
                 0
-            ]), o3 = this.getBoundsZoom(t1, !1, e1.add(n3));
-            if ((o3 = "number" == typeof i1.maxZoom ? Math.min(i1.maxZoom, o3) : o3) === 1 / 0) return {
+            ]), o1 = this.getBoundsZoom(t1, !1, i3.add(n3));
+            return (o1 = "number" == typeof e3.maxZoom ? Math.min(e3.maxZoom, o1) : o1) === 1 / 0 ? {
                 center: t1.getCenter(),
-                zoom: o3
-            };
-            var s3 = n3.subtract(e1).divideBy(2), r4 = this.project(t1.getSouthWest(), o3), a3 = this.project(t1.getNorthEast(), o3);
-            return {
-                center: this.unproject(r4.add(a3).divideBy(2).add(s3), o3),
-                zoom: o3
-            };
+                zoom: o1
+            } : (e3 = n3.subtract(i3).divideBy(2), n3 = this.project(t1.getSouthWest(), o1), i3 = this.project(t1.getNorthEast(), o1), {
+                center: this.unproject(n3.add(i3).divideBy(2).add(e3), o1),
+                zoom: o1
+            });
         },
-        fitBounds: function(t1, i1) {
-            if (!(t1 = N(t1)).isValid()) throw new Error("Bounds are not valid.");
-            var e1 = this._getBoundsCenterZoom(t1, i1);
-            return this.setView(e1.center, e1.zoom, i1);
+        fitBounds: function(t1, e3) {
+            if ((t1 = g(t1)).isValid()) return t1 = this._getBoundsCenterZoom(t1, e3), this.setView(t1.center, t1.zoom, e3);
+            throw new Error("Bounds are not valid.");
         },
         fitWorld: function(t1) {
             return this.fitBounds([
@@ -1798,164 +1842,155 @@ function fitBoundsPadding(e) {
                 ]
             ], t1);
         },
-        panTo: function(t1, i1) {
+        panTo: function(t1, e3) {
             return this.setView(t1, this._zoom, {
-                pan: i1
+                pan: e3
             });
         },
-        panBy: function(t1, i1) {
-            var e1;
-            return i1 = i1 || {
-            }, (t1 = A(t1).round()).x || t1.y ? (!0 === i1.animate || this.getSize().contains(t1) ? (this._panAnim || (this._panAnim = new Gi, this._panAnim.on({
+        panBy: function(t1, e3) {
+            var i3;
+            return e3 = e3 || {
+            }, (t1 = m(t1).round()).x || t1.y ? (!0 === e3.animate || this.getSize().contains(t1) ? (this._panAnim || (this._panAnim = new Fe, this._panAnim.on({
                 step: this._onPanTransitionStep,
                 end: this._onPanTransitionEnd
-            }, this)), i1.noMoveStart || this.fire("movestart"), !1 !== i1.animate ? (ci(this._mapPane, "leaflet-pan-anim"), e1 = this._getMapPanePos().subtract(t1).round(), this._panAnim.run(this._mapPane, e1, i1.duration || 0.25, i1.easeLinearity)) : (this._rawPanBy(t1), this.fire("move").fire("moveend"))) : this._resetView(this.unproject(this.project(this.getCenter()).add(t1)), this.getZoom()), this) : this.fire("moveend");
+            }, this)), e3.noMoveStart || this.fire("movestart"), !1 !== e3.animate ? (M(this._mapPane, "leaflet-pan-anim"), i3 = this._getMapPanePos().subtract(t1).round(), this._panAnim.run(this._mapPane, i3, e3.duration || 0.25, e3.easeLinearity)) : (this._rawPanBy(t1), this.fire("move").fire("moveend"))) : this._resetView(this.unproject(this.project(this.getCenter()).add(t1)), this.getZoom()), this) : this.fire("moveend");
         },
-        flyTo: function(s3, r4, t1) {
+        flyTo: function(n3, o1, t1) {
             if (!1 === (t1 = t1 || {
-            }).animate || !vt) return this.setView(s3, r4, t1);
+            }).animate || !b.any3d) return this.setView(n3, o1, t1);
             this._stop();
-            var a3 = this.project(this.getCenter()), h1 = this.project(s3), i1 = this.getSize(), u1 = this._zoom;
-            s3 = j(s3), r4 = (void 0) === r4 ? u1 : r4;
-            var l1 = Math.max(i1.x, i1.y), n3 = l1 * this.getZoomScale(u1, r4), c1 = h1.distanceTo(a3) || 1, _1 = 1.42, o3 = _1 * _1;
-            function e1(t3) {
-                var i4 = (n3 * n3 - l1 * l1 + (t3 ? -1 : 1) * o3 * o3 * c1 * c1) / (2 * (t3 ? n3 : l1) * o3 * c1), e3 = Math.sqrt(i4 * i4 + 1) - i4;
-                return e3 < 0.000000001 ? -18 : Math.log(e3);
-            }
+            var s1 = this.project(this.getCenter()), r4 = this.project(n3), e3 = this.getSize(), a2 = this._zoom, h2 = (n3 = w(n3), o1 = (void 0) === o1 ? a2 : o1, Math.max(e3.x, e3.y)), i3 = h2 * this.getZoomScale(a2, o1), l1 = r4.distanceTo(s1) || 1, u1 = 1.42, c1 = u1 * u1;
             function d1(t3) {
+                t3 = (i3 * i3 - h2 * h2 + (t3 ? -1 : 1) * c1 * c1 * l1 * l1) / (2 * (t3 ? i3 : h2) * c1 * l1), t3 = Math.sqrt(t3 * t3 + 1) - t3;
+                return t3 < 0.000000001 ? -18 : Math.log(t3);
+            }
+            function _1(t3) {
                 return (Math.exp(t3) - Math.exp(-t3)) / 2;
             }
             function p1(t3) {
                 return (Math.exp(t3) + Math.exp(-t3)) / 2;
             }
-            var m1 = e1(0);
+            var m1 = d1(0);
             function f1(t3) {
-                var i4;
-                return l1 * (p1(m1) * (d1(i4 = m1 + _1 * t3) / p1(i4)) - d1(m1)) / o3;
+                return h2 * (p1(m1) * (_1(t3 = m1 + u1 * t3) / p1(t3)) - _1(m1)) / c1;
             }
-            var g1 = Date.now(), v1 = (e1(1) - m1) / _1, y1 = t1.duration ? 1000 * t1.duration : 1000 * v1 * 0.8;
+            var g1 = Date.now(), v1 = (d1(1) - m1) / u1, y1 = t1.duration ? 1000 * t1.duration : 1000 * v1 * 0.8;
             return this._moveStart(!0, t1.noMoveStart), (function t3() {
-                var i4, e3, n5 = (Date.now() - g1) / y1, o4 = (i4 = n5, (1 - Math.pow(1 - i4, 1.5)) * v1);
-                n5 <= 1 ? (this._flyToFrame = M(t3, this), this._move(this.unproject(a3.add(h1.subtract(a3).multiplyBy(f1(o4) / c1)), u1), this.getScaleZoom(l1 / (e3 = o4, l1 * (p1(m1) / p1(m1 + _1 * e3))), u1), {
+                var e4 = (Date.now() - g1) / y1, i4 = (1 - Math.pow(1 - e4, 1.5)) * v1;
+                e4 <= 1 ? (this._flyToFrame = x(t3, this), this._move(this.unproject(s1.add(r4.subtract(s1).multiplyBy(f1(i4) / l1)), a2), this.getScaleZoom(h2 / (e4 = i4, h2 * (p1(m1) / p1(m1 + u1 * e4))), a2), {
                     flyTo: !0
-                })) : this._move(s3, r4)._moveEnd(!0);
+                })) : this._move(n3, o1)._moveEnd(!0);
             }).call(this), this;
         },
-        flyToBounds: function(t1, i1) {
-            var e1 = this._getBoundsCenterZoom(t1, i1);
-            return this.flyTo(e1.center, e1.zoom, i1);
+        flyToBounds: function(t1, e3) {
+            t1 = this._getBoundsCenterZoom(t1, e3);
+            return this.flyTo(t1.center, t1.zoom, e3);
         },
         setMaxBounds: function(t1) {
-            return (t1 = N(t1)).isValid() ? (this.options.maxBounds && this.off("moveend", this._panInsideMaxBounds), this.options.maxBounds = t1, this._loaded && this._panInsideMaxBounds(), this.on("moveend", this._panInsideMaxBounds)) : (this.options.maxBounds = null, this.off("moveend", this._panInsideMaxBounds));
+            return t1 = g(t1), this.listens("moveend", this._panInsideMaxBounds) && this.off("moveend", this._panInsideMaxBounds), t1.isValid() ? (this.options.maxBounds = t1, this._loaded && this._panInsideMaxBounds(), this.on("moveend", this._panInsideMaxBounds)) : (this.options.maxBounds = null, this);
         },
         setMinZoom: function(t1) {
-            var i1 = this.options.minZoom;
-            return this.options.minZoom = t1, this._loaded && i1 !== t1 && (this.fire("zoomlevelschange"), this.getZoom() < this.options.minZoom) ? this.setZoom(t1) : this;
+            var e3 = this.options.minZoom;
+            return this.options.minZoom = t1, this._loaded && e3 !== t1 && (this.fire("zoomlevelschange"), this.getZoom() < this.options.minZoom) ? this.setZoom(t1) : this;
         },
         setMaxZoom: function(t1) {
-            var i1 = this.options.maxZoom;
-            return this.options.maxZoom = t1, this._loaded && i1 !== t1 && (this.fire("zoomlevelschange"), this.getZoom() > this.options.maxZoom) ? this.setZoom(t1) : this;
+            var e3 = this.options.maxZoom;
+            return this.options.maxZoom = t1, this._loaded && e3 !== t1 && (this.fire("zoomlevelschange"), this.getZoom() > this.options.maxZoom) ? this.setZoom(t1) : this;
         },
-        panInsideBounds: function(t1, i1) {
+        panInsideBounds: function(t1, e3) {
             this._enforcingBounds = !0;
-            var e1 = this.getCenter(), n3 = this._limitCenter(e1, this._zoom, N(t1));
-            return e1.equals(n3) || this.panTo(n3, i1), this._enforcingBounds = !1, this;
+            var i3 = this.getCenter(), t1 = this._limitCenter(i3, this._zoom, g(t1));
+            return i3.equals(t1) || this.panTo(t1, e3), this._enforcingBounds = !1, this;
         },
-        panInside: function(t1, i1) {
-            var e1, n3, o3 = A((i1 = i1 || {
-            }).paddingTopLeft || i1.padding || [
+        panInside: function(t1, e3) {
+            var i3 = m((e3 = e3 || {
+            }).paddingTopLeft || e3.padding || [
                 0,
                 0
-            ]), s3 = A(i1.paddingBottomRight || i1.padding || [
+            ]), n3 = m(e3.paddingBottomRight || e3.padding || [
                 0,
                 0
-            ]), r4 = this.getCenter(), a3 = this.project(r4), h1 = this.project(t1), u1 = this.getPixelBounds(), l1 = u1.getSize().divideBy(2), c1 = O([
-                u1.min.add(o3),
-                u1.max.subtract(s3)
-            ]);
-            return c1.contains(h1) || (this._enforcingBounds = !0, e1 = a3.subtract(h1), n3 = A(h1.x + e1.x, h1.y + e1.y), (h1.x < c1.min.x || h1.x > c1.max.x) && (n3.x = a3.x - e1.x, 0 < e1.x ? n3.x += l1.x - o3.x : n3.x -= l1.x - s3.x), (h1.y < c1.min.y || h1.y > c1.max.y) && (n3.y = a3.y - e1.y, 0 < e1.y ? n3.y += l1.y - o3.y : n3.y -= l1.y - s3.y), this.panTo(this.unproject(n3), i1), this._enforcingBounds = !1), this;
+            ]), o1 = this.project(this.getCenter()), t1 = this.project(t1), s1 = this.getPixelBounds(), i3 = _([
+                s1.min.add(i3),
+                s1.max.subtract(n3)
+            ]), s1 = i3.getSize();
+            return i3.contains(t1) || (this._enforcingBounds = !0, n3 = t1.subtract(i3.getCenter()), i3 = i3.extend(t1).getSize().subtract(s1), o1.x += n3.x < 0 ? -i3.x : i3.x, o1.y += n3.y < 0 ? -i3.y : i3.y, this.panTo(this.unproject(o1), e3), this._enforcingBounds = !1), this;
         },
         invalidateSize: function(t1) {
             if (!this._loaded) return this;
-            t1 = h({
+            t1 = l({
                 animate: !1,
                 pan: !0
             }, !0 === t1 ? {
                 animate: !0
             } : t1);
-            var i1 = this.getSize();
-            this._sizeChanged = !0, this._lastCenter = null;
-            var e1 = this.getSize(), n3 = i1.divideBy(2).round(), o3 = e1.divideBy(2).round(), s3 = n3.subtract(o3);
-            return s3.x || s3.y ? (t1.animate && t1.pan ? this.panBy(s3) : (t1.pan && this._rawPanBy(s3), this.fire("move"), t1.debounceMoveend ? (clearTimeout(this._sizeTimer), this._sizeTimer = setTimeout(p(this.fire, this, "moveend"), 200)) : this.fire("moveend")), this.fire("resize", {
-                oldSize: i1,
-                newSize: e1
+            var e3 = this.getSize(), i3 = (this._sizeChanged = !0, this._lastCenter = null, this.getSize()), n3 = e3.divideBy(2).round(), o1 = i3.divideBy(2).round(), n3 = n3.subtract(o1);
+            return n3.x || n3.y ? (t1.animate && t1.pan ? this.panBy(n3) : (t1.pan && this._rawPanBy(n3), this.fire("move"), t1.debounceMoveend ? (clearTimeout(this._sizeTimer), this._sizeTimer = setTimeout(a2(this.fire, this, "moveend"), 200)) : this.fire("moveend")), this.fire("resize", {
+                oldSize: e3,
+                newSize: i3
             })) : this;
         },
         stop: function() {
             return this.setZoom(this._limitZoom(this._zoom)), this.options.zoomSnap || this.fire("viewreset"), this._stop();
         },
         locate: function(t1) {
-            if (t1 = this._locateOptions = h({
+            var e3, i3;
+            return t1 = this._locateOptions = l({
                 timeout: 10000,
                 watch: !1
-            }, t1), !("geolocation" in navigator)) return this._handleGeolocationError({
+            }, t1), "geolocation" in navigator ? (e3 = a2(this._handleGeolocationResponse, this), i3 = a2(this._handleGeolocationError, this), t1.watch ? this._locationWatchId = navigator.geolocation.watchPosition(e3, i3, t1) : navigator.geolocation.getCurrentPosition(e3, i3, t1)) : this._handleGeolocationError({
                 code: 0,
                 message: "Geolocation not supported."
             }), this;
-            var i1 = p(this._handleGeolocationResponse, this), e1 = p(this._handleGeolocationError, this);
-            return t1.watch ? this._locationWatchId = navigator.geolocation.watchPosition(i1, e1, t1) : navigator.geolocation.getCurrentPosition(i1, e1, t1), this;
         },
         stopLocate: function() {
             return navigator.geolocation && navigator.geolocation.clearWatch && navigator.geolocation.clearWatch(this._locationWatchId), this._locateOptions && (this._locateOptions.setView = !1), this;
         },
         _handleGeolocationError: function(t1) {
-            var i1 = t1.code, e1 = t1.message || (1 === i1 ? "permission denied" : 2 === i1 ? "position unavailable" : "timeout");
-            this._locateOptions.setView && !this._loaded && this.fitWorld(), this.fire("locationerror", {
-                code: i1,
-                message: "Geolocation error: " + e1 + "."
-            });
+            var e3;
+            this._container._leaflet_id && (e3 = t1.code, t1 = t1.message || (1 === e3 ? "permission denied" : 2 === e3 ? "position unavailable" : "timeout"), this._locateOptions.setView && !this._loaded && this.fitWorld(), this.fire("locationerror", {
+                code: e3,
+                message: "Geolocation error: " + t1 + "."
+            }));
         },
         _handleGeolocationResponse: function(t1) {
-            var i1, e1 = new D(t1.coords.latitude, t1.coords.longitude), n3 = e1.toBounds(2 * t1.coords.accuracy), o3 = this._locateOptions;
-            o3.setView && (i1 = this.getBoundsZoom(n3), this.setView(e1, o3.maxZoom ? Math.min(i1, o3.maxZoom) : i1));
-            var s3 = {
-                latlng: e1,
-                bounds: n3,
-                timestamp: t1.timestamp
-            };
-            for(var r4 in t1.coords)"number" == typeof t1.coords[r4] && (s3[r4] = t1.coords[r4]);
-            this.fire("locationfound", s3);
+            if (this._container._leaflet_id) {
+                var e3, i3, n3 = new v(t1.coords.latitude, t1.coords.longitude), o1 = n3.toBounds(2 * t1.coords.accuracy), s1 = this._locateOptions, r4 = (s1.setView && (e3 = this.getBoundsZoom(o1), this.setView(n3, s1.maxZoom ? Math.min(e3, s1.maxZoom) : e3)), {
+                    latlng: n3,
+                    bounds: o1,
+                    timestamp: t1.timestamp
+                });
+                for(i3 in t1.coords)"number" == typeof t1.coords[i3] && (r4[i3] = t1.coords[i3]);
+                this.fire("locationfound", r4);
+            }
         },
-        addHandler: function(t1, i1) {
-            if (!i1) return this;
-            var e1 = this[t1] = new i1(this);
-            return this._handlers.push(e1), this.options[t1] && e1.enable(), this;
+        addHandler: function(t1, e4) {
+            return e4 && (e4 = this[t1] = new e4(this), this._handlers.push(e4), this.options[t1] && e4.enable()), this;
         },
         remove: function() {
-            if (this._initEvents(!0), this.off("moveend", this._panInsideMaxBounds), this._containerId !== this._container._leaflet_id) throw new Error("Map container is being reused by another instance");
+            if (this._initEvents(!0), this.options.maxBounds && this.off("moveend", this._panInsideMaxBounds), this._containerId !== this._container._leaflet_id) throw new Error("Map container is being reused by another instance");
             try {
                 delete this._container._leaflet_id, delete this._containerId;
             } catch (t1) {
                 this._container._leaflet_id = void 0, this._containerId = void 0;
             }
-            var t1;
-            for(t1 in (void 0) !== this._locationWatchId && this.stopLocate(), this._stop(), ri(this._mapPane), this._clearControlPos && this._clearControlPos(), this._resizeRequest && (z(this._resizeRequest), this._resizeRequest = null), this._clearHandlers(), this._loaded && this.fire("unload"), this._layers)this._layers[t1].remove();
-            for(t1 in this._panes)ri(this._panes[t1]);
+            for(var t1 in (void 0) !== this._locationWatchId && this.stopLocate(), this._stop(), T(this._mapPane), this._clearControlPos && this._clearControlPos(), this._resizeRequest && (r(this._resizeRequest), this._resizeRequest = null), this._clearHandlers(), this._loaded && this.fire("unload"), this._layers)this._layers[t1].remove();
+            for(t1 in this._panes)T(this._panes[t1]);
             return this._layers = [], this._panes = [], delete this._mapPane, delete this._renderer, this;
         },
-        createPane: function(t1, i1) {
-            var e1 = si("div", "leaflet-pane" + (t1 ? " leaflet-" + t1.replace("Pane", "") + "-pane" : ""), i1 || this._mapPane);
-            return t1 && (this._panes[t1] = e1), e1;
+        createPane: function(t1, e4) {
+            e4 = P("div", "leaflet-pane" + (t1 ? " leaflet-" + t1.replace("Pane", "") + "-pane" : ""), e4 || this._mapPane);
+            return t1 && (this._panes[t1] = e4), e4;
         },
         getCenter: function() {
-            return this._checkIfLoaded(), this._lastCenter && !this._moved() ? this._lastCenter : this.layerPointToLatLng(this._getCenterLayerPoint());
+            return this._checkIfLoaded(), this._lastCenter && !this._moved() ? this._lastCenter.clone() : this.layerPointToLatLng(this._getCenterLayerPoint());
         },
         getZoom: function() {
             return this._zoom;
         },
         getBounds: function() {
             var t1 = this.getPixelBounds();
-            return new R(this.unproject(t1.getBottomLeft()), this.unproject(t1.getTopRight()));
+            return new s(this.unproject(t1.getBottomLeft()), this.unproject(t1.getTopRight()));
         },
         getMinZoom: function() {
             return (void 0) === this.options.minZoom ? this._layersMinZoom || 0 : this.options.minZoom;
@@ -1963,20 +1998,20 @@ function fitBoundsPadding(e) {
         getMaxZoom: function() {
             return (void 0) === this.options.maxZoom ? (void 0) === this._layersMaxZoom ? 1 / 0 : this._layersMaxZoom : this.options.maxZoom;
         },
-        getBoundsZoom: function(t1, i1, e1) {
-            t1 = N(t1), e1 = A(e1 || [
+        getBoundsZoom: function(t1, e4, i4) {
+            t1 = g(t1), i4 = m(i4 || [
                 0,
                 0
             ]);
-            var n3 = this.getZoom() || 0, o3 = this.getMinZoom(), s3 = this.getMaxZoom(), r4 = t1.getNorthWest(), a3 = t1.getSouthEast(), h1 = this.getSize().subtract(e1), u1 = O(this.project(a3, n3), this.project(r4, n3)).getSize(), l1 = vt ? this.options.zoomSnap : 1, c1 = h1.x / u1.x, _1 = h1.y / u1.y, d1 = i1 ? Math.max(c1, _1) : Math.min(c1, _1), n3 = this.getScaleZoom(d1, n3);
-            return l1 && (n3 = Math.round(n3 / (l1 / 100)) * (l1 / 100), n3 = i1 ? Math.ceil(n3 / l1) * l1 : Math.floor(n3 / l1) * l1), Math.max(o3, Math.min(s3, n3));
+            var n4 = this.getZoom() || 0, o2 = this.getMinZoom(), s2 = this.getMaxZoom(), r5 = t1.getNorthWest(), t1 = t1.getSouthEast(), i4 = this.getSize().subtract(i4), t1 = _(this.project(t1, n4), this.project(r5, n4)).getSize(), r5 = b.any3d ? this.options.zoomSnap : 1, a2 = i4.x / t1.x, i4 = i4.y / t1.y, t1 = e4 ? Math.max(a2, i4) : Math.min(a2, i4), n4 = this.getScaleZoom(t1, n4);
+            return r5 && (n4 = Math.round(n4 / (r5 / 100)) * (r5 / 100), n4 = e4 ? Math.ceil(n4 / r5) * r5 : Math.floor(n4 / r5) * r5), Math.max(o2, Math.min(s2, n4));
         },
         getSize: function() {
-            return this._size && !this._sizeChanged || (this._size = new k(this._container.clientWidth || 0, this._container.clientHeight || 0), this._sizeChanged = !1), this._size.clone();
+            return this._size && !this._sizeChanged || (this._size = new p(this._container.clientWidth || 0, this._container.clientHeight || 0), this._sizeChanged = !1), this._size.clone();
         },
-        getPixelBounds: function(t1, i1) {
-            var e1 = this._getTopLeftPoint(t1, i1);
-            return new I(e1, e1.add(this.getSize()));
+        getPixelBounds: function(t1, e4) {
+            t1 = this._getTopLeftPoint(t1, e4);
+            return new f(t1, t1.add(this.getSize()));
         },
         getPixelOrigin: function() {
             return this._checkIfLoaded(), this._pixelOrigin;
@@ -1993,53 +2028,51 @@ function fitBoundsPadding(e) {
         getContainer: function() {
             return this._container;
         },
-        getZoomScale: function(t1, i1) {
-            var e1 = this.options.crs;
-            return i1 = (void 0) === i1 ? this._zoom : i1, e1.scale(t1) / e1.scale(i1);
+        getZoomScale: function(t1, e4) {
+            var i4 = this.options.crs;
+            return e4 = (void 0) === e4 ? this._zoom : e4, i4.scale(t1) / i4.scale(e4);
         },
-        getScaleZoom: function(t1, i1) {
-            var e1 = this.options.crs;
-            i1 = (void 0) === i1 ? this._zoom : i1;
-            var n3 = e1.zoom(t1 * e1.scale(i1));
-            return isNaN(n3) ? 1 / 0 : n3;
+        getScaleZoom: function(t1, e4) {
+            var i4 = this.options.crs, t1 = (e4 = (void 0) === e4 ? this._zoom : e4, i4.zoom(t1 * i4.scale(e4)));
+            return isNaN(t1) ? 1 / 0 : t1;
         },
-        project: function(t1, i1) {
-            return i1 = (void 0) === i1 ? this._zoom : i1, this.options.crs.latLngToPoint(j(t1), i1);
+        project: function(t1, e4) {
+            return e4 = (void 0) === e4 ? this._zoom : e4, this.options.crs.latLngToPoint(w(t1), e4);
         },
-        unproject: function(t1, i1) {
-            return i1 = (void 0) === i1 ? this._zoom : i1, this.options.crs.pointToLatLng(A(t1), i1);
+        unproject: function(t1, e4) {
+            return e4 = (void 0) === e4 ? this._zoom : e4, this.options.crs.pointToLatLng(m(t1), e4);
         },
         layerPointToLatLng: function(t1) {
-            var i1 = A(t1).add(this.getPixelOrigin());
-            return this.unproject(i1);
+            t1 = m(t1).add(this.getPixelOrigin());
+            return this.unproject(t1);
         },
         latLngToLayerPoint: function(t1) {
-            return this.project(j(t1))._round()._subtract(this.getPixelOrigin());
+            return this.project(w(t1))._round()._subtract(this.getPixelOrigin());
         },
         wrapLatLng: function(t1) {
-            return this.options.crs.wrapLatLng(j(t1));
+            return this.options.crs.wrapLatLng(w(t1));
         },
         wrapLatLngBounds: function(t1) {
-            return this.options.crs.wrapLatLngBounds(N(t1));
+            return this.options.crs.wrapLatLngBounds(g(t1));
         },
-        distance: function(t1, i1) {
-            return this.options.crs.distance(j(t1), j(i1));
+        distance: function(t1, e4) {
+            return this.options.crs.distance(w(t1), w(e4));
         },
         containerPointToLayerPoint: function(t1) {
-            return A(t1).subtract(this._getMapPanePos());
+            return m(t1).subtract(this._getMapPanePos());
         },
         layerPointToContainerPoint: function(t1) {
-            return A(t1).add(this._getMapPanePos());
+            return m(t1).add(this._getMapPanePos());
         },
         containerPointToLatLng: function(t1) {
-            var i1 = this.containerPointToLayerPoint(A(t1));
-            return this.layerPointToLatLng(i1);
+            t1 = this.containerPointToLayerPoint(m(t1));
+            return this.layerPointToLatLng(t1);
         },
         latLngToContainerPoint: function(t1) {
-            return this.layerPointToContainerPoint(this.latLngToLayerPoint(j(t1)));
+            return this.layerPointToContainerPoint(this.latLngToLayerPoint(w(t1)));
         },
         mouseEventToContainerPoint: function(t1) {
-            return Di(t1, this._container);
+            return De(t1, this._container);
         },
         mouseEventToLayerPoint: function(t1) {
             return this.containerPointToLayerPoint(this.mouseEventToContainerPoint(t1));
@@ -2048,46 +2081,42 @@ function fitBoundsPadding(e) {
             return this.layerPointToLatLng(this.mouseEventToLayerPoint(t1));
         },
         _initContainer: function(t1) {
-            var i1 = this._container = ni(t1);
-            if (!i1) throw new Error("Map container not found.");
-            if (i1._leaflet_id) throw new Error("Map container is already initialized.");
-            zi(i1, "scroll", this._onScroll, this), this._containerId = m(i1);
+            t1 = this._container = _e(t1);
+            if (!t1) throw new Error("Map container not found.");
+            if (t1._leaflet_id) throw new Error("Map container is already initialized.");
+            S(t1, "scroll", this._onScroll, this), this._containerId = h(t1);
         },
         _initLayout: function() {
-            var t1 = this._container;
-            this._fadeAnimated = this.options.fadeAnimation && vt, ci(t1, "leaflet-container" + (bt ? " leaflet-touch" : "") + (zt ? " leaflet-retina" : "") + (it ? " leaflet-oldie" : "") + (ct ? " leaflet-safari" : "") + (this._fadeAnimated ? " leaflet-fade-anim" : ""));
-            var i1 = oi(t1, "position");
-            "absolute" !== i1 && "relative" !== i1 && "fixed" !== i1 && (t1.style.position = "relative"), this._initPanes(), this._initControlPos && this._initControlPos();
+            var t1 = this._container, e4 = (this._fadeAnimated = this.options.fadeAnimation && b.any3d, M(t1, "leaflet-container" + (b.touch ? " leaflet-touch" : "") + (b.retina ? " leaflet-retina" : "") + (b.ielt9 ? " leaflet-oldie" : "") + (b.safari ? " leaflet-safari" : "") + (this._fadeAnimated ? " leaflet-fade-anim" : "")), pe(t1, "position"));
+            "absolute" !== e4 && "relative" !== e4 && "fixed" !== e4 && "sticky" !== e4 && (t1.style.position = "relative"), this._initPanes(), this._initControlPos && this._initControlPos();
         },
         _initPanes: function() {
             var t1 = this._panes = {
             };
             this._paneRenderers = {
-            }, this._mapPane = this.createPane("mapPane", this._container), vi(this._mapPane, new k(0, 0)), this.createPane("tilePane"), this.createPane("shadowPane"), this.createPane("overlayPane"), this.createPane("markerPane"), this.createPane("tooltipPane"), this.createPane("popupPane"), this.options.markerZoomAnimation || (ci(t1.markerPane, "leaflet-zoom-hide"), ci(t1.shadowPane, "leaflet-zoom-hide"));
+            }, this._mapPane = this.createPane("mapPane", this._container), Z(this._mapPane, new p(0, 0)), this.createPane("tilePane"), this.createPane("overlayPane"), this.createPane("shadowPane"), this.createPane("markerPane"), this.createPane("tooltipPane"), this.createPane("popupPane"), this.options.markerZoomAnimation || (M(t1.markerPane, "leaflet-zoom-hide"), M(t1.shadowPane, "leaflet-zoom-hide"));
         },
-        _resetView: function(t1, i1) {
-            vi(this._mapPane, new k(0, 0));
-            var e1 = !this._loaded;
-            this._loaded = !0, i1 = this._limitZoom(i1), this.fire("viewprereset");
-            var n3 = this._zoom !== i1;
-            this._moveStart(n3, !1)._move(t1, i1)._moveEnd(n3), this.fire("viewreset"), e1 && this.fire("load");
+        _resetView: function(t1, e4, i4) {
+            Z(this._mapPane, new p(0, 0));
+            var n4 = !this._loaded, o2 = (this._loaded = !0, e4 = this._limitZoom(e4), this.fire("viewprereset"), this._zoom !== e4);
+            this._moveStart(o2, i4)._move(t1, e4)._moveEnd(o2), this.fire("viewreset"), n4 && this.fire("load");
         },
-        _moveStart: function(t1, i1) {
-            return t1 && this.fire("zoomstart"), i1 || this.fire("movestart"), this;
+        _moveStart: function(t1, e4) {
+            return t1 && this.fire("zoomstart"), e4 || this.fire("movestart"), this;
         },
-        _move: function(t1, i1, e1) {
-            (void 0) === i1 && (i1 = this._zoom);
-            var n3 = this._zoom !== i1;
-            return this._zoom = i1, this._lastCenter = t1, this._pixelOrigin = this._getNewPixelOrigin(t1), (n3 || e1 && e1.pinch) && this.fire("zoom", e1), this.fire("move", e1);
+        _move: function(t1, e4, i4, n4) {
+            (void 0) === e4 && (e4 = this._zoom);
+            var o2 = this._zoom !== e4;
+            return this._zoom = e4, this._lastCenter = t1, this._pixelOrigin = this._getNewPixelOrigin(t1), n4 ? i4 && i4.pinch && this.fire("zoom", i4) : ((o2 || i4 && i4.pinch) && this.fire("zoom", i4), this.fire("move", i4)), this;
         },
         _moveEnd: function(t1) {
             return t1 && this.fire("zoomend"), this.fire("moveend");
         },
         _stop: function() {
-            return z(this._flyToFrame), this._panAnim && this._panAnim.stop(), this;
+            return r(this._flyToFrame), this._panAnim && this._panAnim.stop(), this;
         },
         _rawPanBy: function(t1) {
-            vi(this._mapPane, this._getMapPanePos().subtract(t1));
+            Z(this._mapPane, this._getMapPanePos().subtract(t1));
         },
         _getZoomSpan: function() {
             return this.getMaxZoom() - this.getMinZoom();
@@ -2101,11 +2130,11 @@ function fitBoundsPadding(e) {
         _initEvents: function(t1) {
             this._targets = {
             };
-            var i1 = t1 ? Si : zi;
-            i1((this._targets[m(this._container)] = this)._container, "click dblclick mousedown mouseup mouseover mouseout mousemove contextmenu keypress keydown keyup", this._handleDOMEvent, this), this.options.trackResize && i1(window, "resize", this._onResize, this), vt && this.options.transform3DLimit && (t1 ? this.off : this.on).call(this, "moveend", this._onMoveEnd);
+            var e4 = t1 ? k : S;
+            e4((this._targets[h(this._container)] = this)._container, "click dblclick mousedown mouseup mouseover mouseout mousemove contextmenu keypress keydown keyup", this._handleDOMEvent, this), this.options.trackResize && e4(window, "resize", this._onResize, this), b.any3d && this.options.transform3DLimit && (t1 ? this.off : this.on).call(this, "moveend", this._onMoveEnd);
         },
         _onResize: function() {
-            z(this._resizeRequest), this._resizeRequest = M(function() {
+            r(this._resizeRequest), this._resizeRequest = x(function() {
                 this.invalidateSize({
                     debounceMoveend: !0
                 });
@@ -2118,26 +2147,32 @@ function fitBoundsPadding(e) {
             var t1 = this._getMapPanePos();
             Math.max(Math.abs(t1.x), Math.abs(t1.y)) >= this.options.transform3DLimit && this._resetView(this.getCenter(), this.getZoom());
         },
-        _findEventTargets: function(t1, i1) {
-            for(var e1, n3 = [], o3 = "mouseout" === i1 || "mouseover" === i1, s3 = t1.target || t1.srcElement, r4 = !1; s3;){
-                if ((e1 = this._targets[m(s3)]) && ("click" === i1 || "preclick" === i1) && !t1._simulated && this._draggableMoved(e1)) {
-                    r4 = !0;
+        _findEventTargets: function(t1, e4) {
+            for(var i4, n4 = [], o2 = "mouseout" === e4 || "mouseover" === e4, s2 = t1.target || t1.srcElement, r5 = !1; s2;){
+                if ((i4 = this._targets[h(s2)]) && ("click" === e4 || "preclick" === e4) && this._draggableMoved(i4)) {
+                    r5 = !0;
                     break;
                 }
-                if (e1 && e1.listens(i1, !0)) {
-                    if (o3 && !Vi(s3, t1)) break;
-                    if (n3.push(e1), o3) break;
+                if (i4 && i4.listens(e4, !0)) {
+                    if (o2 && !We(s2, t1)) break;
+                    if (n4.push(i4), o2) break;
                 }
-                if (s3 === this._container) break;
-                s3 = s3.parentNode;
+                if (s2 === this._container) break;
+                s2 = s2.parentNode;
             }
-            return n3.length || r4 || o3 || !Vi(s3, t1) || (n3 = [
+            return n4 = n4.length || r5 || o2 || !this.listens(e4, !0) ? n4 : [
                 this
-            ]), n3;
+            ];
+        },
+        _isClickDisabled: function(t1) {
+            for(; t1 && t1 !== this._container;){
+                if (t1._leaflet_disable_click) return !0;
+                t1 = t1.parentNode;
+            }
         },
         _handleDOMEvent: function(t1) {
-            var i1;
-            this._loaded && !Ui(t1) && ("mousedown" !== (i1 = t1.type) && "keypress" !== i1 && "keyup" !== i1 && "keydown" !== i1 || Pi(t1.target || t1.srcElement), this._fireDOMEvent(t1, i1));
+            var e4, i4 = t1.target || t1.srcElement;
+            !this._loaded || i4._leaflet_disable_events || "click" === t1.type && this._isClickDisabled(i4) || ("mousedown" === (e4 = t1.type) && Me(i4), this._fireDOMEvent(t1, e4));
         },
         _mouseEvents: [
             "click",
@@ -2146,32 +2181,35 @@ function fitBoundsPadding(e) {
             "mouseout",
             "contextmenu"
         ],
-        _fireDOMEvent: function(t1, i1, e1) {
-            var n3;
-            if ("click" === t1.type && ((n3 = h({
-            }, t1)).type = "preclick", this._fireDOMEvent(n3, n3.type, e1)), !t1._stopped && (e1 = (e1 || []).concat(this._findEventTargets(t1, i1))).length) {
-                var o3 = e1[0];
-                "contextmenu" === i1 && o3.listens(i1, !0) && Ri(t1);
-                var s3, r4 = {
+        _fireDOMEvent: function(t1, e4, i4) {
+            "click" === t1.type && ((a3 = l({
+            }, t1)).type = "preclick", this._fireDOMEvent(a3, a3.type, i4));
+            var n4 = this._findEventTargets(t1, e4);
+            if (i4) {
+                for(var o2 = [], s2 = 0; s2 < i4.length; s2++)i4[s2].listens(e4, !0) && o2.push(i4[s2]);
+                n4 = o2.concat(n4);
+            }
+            if (n4.length) {
+                "contextmenu" === e4 && O(t1);
+                var r5, a3 = n4[0], h2 = {
                     originalEvent: t1
                 };
-                "keypress" !== t1.type && "keydown" !== t1.type && "keyup" !== t1.type && (s3 = o3.getLatLng && (!o3._radius || o3._radius <= 10), r4.containerPoint = s3 ? this.latLngToContainerPoint(o3.getLatLng()) : this.mouseEventToContainerPoint(t1), r4.layerPoint = this.containerPointToLayerPoint(r4.containerPoint), r4.latlng = s3 ? o3.getLatLng() : this.layerPointToLatLng(r4.layerPoint));
-                for(var a3 = 0; a3 < e1.length; a3++)if (e1[a3].fire(i1, r4, !0), r4.originalEvent._stopped || !1 === e1[a3].options.bubblingMouseEvents && -1 !== v(this._mouseEvents, i1)) return;
+                for("keypress" !== t1.type && "keydown" !== t1.type && "keyup" !== t1.type && (r5 = a3.getLatLng && (!a3._radius || a3._radius <= 10), h2.containerPoint = r5 ? this.latLngToContainerPoint(a3.getLatLng()) : this.mouseEventToContainerPoint(t1), h2.layerPoint = this.containerPointToLayerPoint(h2.containerPoint), h2.latlng = r5 ? a3.getLatLng() : this.layerPointToLatLng(h2.layerPoint)), s2 = 0; s2 < n4.length; s2++)if (n4[s2].fire(e4, h2, !0), h2.originalEvent._stopped || !1 === n4[s2].options.bubblingMouseEvents && -1 !== G(this._mouseEvents, e4)) return;
             }
         },
         _draggableMoved: function(t1) {
             return (t1 = t1.dragging && t1.dragging.enabled() ? t1 : this).dragging && t1.dragging.moved() || this.boxZoom && this.boxZoom.moved();
         },
         _clearHandlers: function() {
-            for(var t1 = 0, i1 = this._handlers.length; t1 < i1; t1++)this._handlers[t1].disable();
+            for(var t1 = 0, e4 = this._handlers.length; t1 < e4; t1++)this._handlers[t1].disable();
         },
-        whenReady: function(t1, i1) {
-            return this._loaded ? t1.call(i1 || this, {
+        whenReady: function(t1, e4) {
+            return this._loaded ? t1.call(e4 || this, {
                 target: this
-            }) : this.on("load", t1, i1), this;
+            }) : this.on("load", t1, e4), this;
         },
         _getMapPanePos: function() {
-            return yi(this._mapPane) || new k(0, 0);
+            return Pe(this._mapPane) || new p(0, 0);
         },
         _moved: function() {
             var t1 = this._getMapPanePos();
@@ -2180,24 +2218,24 @@ function fitBoundsPadding(e) {
                 0
             ]);
         },
-        _getTopLeftPoint: function(t1, i1) {
-            return (t1 && (void 0) !== i1 ? this._getNewPixelOrigin(t1, i1) : this.getPixelOrigin()).subtract(this._getMapPanePos());
+        _getTopLeftPoint: function(t1, e4) {
+            return (t1 && (void 0) !== e4 ? this._getNewPixelOrigin(t1, e4) : this.getPixelOrigin()).subtract(this._getMapPanePos());
         },
-        _getNewPixelOrigin: function(t1, i1) {
-            var e1 = this.getSize()._divideBy(2);
-            return this.project(t1, i1)._subtract(e1)._add(this._getMapPanePos())._round();
+        _getNewPixelOrigin: function(t1, e4) {
+            var i4 = this.getSize()._divideBy(2);
+            return this.project(t1, e4)._subtract(i4)._add(this._getMapPanePos())._round();
         },
-        _latLngToNewLayerPoint: function(t1, i1, e1) {
-            var n3 = this._getNewPixelOrigin(e1, i1);
-            return this.project(t1, i1)._subtract(n3);
+        _latLngToNewLayerPoint: function(t1, e4, i4) {
+            i4 = this._getNewPixelOrigin(i4, e4);
+            return this.project(t1, e4)._subtract(i4);
         },
-        _latLngBoundsToNewLayerBounds: function(t1, i1, e1) {
-            var n3 = this._getNewPixelOrigin(e1, i1);
-            return O([
-                this.project(t1.getSouthWest(), i1)._subtract(n3),
-                this.project(t1.getNorthWest(), i1)._subtract(n3),
-                this.project(t1.getSouthEast(), i1)._subtract(n3),
-                this.project(t1.getNorthEast(), i1)._subtract(n3)
+        _latLngBoundsToNewLayerBounds: function(t1, e4, i4) {
+            i4 = this._getNewPixelOrigin(i4, e4);
+            return _([
+                this.project(t1.getSouthWest(), e4)._subtract(i4),
+                this.project(t1.getNorthWest(), e4)._subtract(i4),
+                this.project(t1.getSouthEast(), e4)._subtract(i4),
+                this.project(t1.getNorthEast(), e4)._subtract(i4)
             ]);
         },
         _getCenterLayerPoint: function() {
@@ -2206,53 +2244,48 @@ function fitBoundsPadding(e) {
         _getCenterOffset: function(t1) {
             return this.latLngToLayerPoint(t1).subtract(this._getCenterLayerPoint());
         },
-        _limitCenter: function(t1, i1, e1) {
-            if (!e1) return t1;
-            var n3 = this.project(t1, i1), o4 = this.getSize().divideBy(2), s4 = new I(n3.subtract(o4), n3.add(o4)), r5 = this._getBoundsOffset(s4, e1, i1);
-            return r5.round().equals([
-                0,
-                0
-            ]) ? t1 : this.unproject(n3.add(r5), i1);
+        _limitCenter: function(t1, e4, i4) {
+            var n4, o3;
+            return !i4 || (n4 = this.project(t1, e4), o3 = this.getSize().divideBy(2), o3 = new f(n4.subtract(o3), n4.add(o3)), o3 = this._getBoundsOffset(o3, i4, e4), Math.abs(o3.x) <= 1 && Math.abs(o3.y) <= 1) ? t1 : this.unproject(n4.add(o3), e4);
         },
-        _limitOffset: function(t1, i1) {
-            if (!i1) return t1;
-            var e1 = this.getPixelBounds(), n3 = new I(e1.min.add(t1), e1.max.add(t1));
-            return t1.add(this._getBoundsOffset(n3, i1));
+        _limitOffset: function(t1, e4) {
+            var i4;
+            return e4 ? (i4 = new f((i4 = this.getPixelBounds()).min.add(t1), i4.max.add(t1)), t1.add(this._getBoundsOffset(i4, e4))) : t1;
         },
-        _getBoundsOffset: function(t1, i1, e1) {
-            var n3 = O(this.project(i1.getNorthEast(), e1), this.project(i1.getSouthWest(), e1)), o4 = n3.min.subtract(t1.min), s4 = n3.max.subtract(t1.max);
-            return new k(this._rebound(o4.x, -s4.x), this._rebound(o4.y, -s4.y));
+        _getBoundsOffset: function(t1, e4, i4) {
+            e4 = _(this.project(e4.getNorthEast(), i4), this.project(e4.getSouthWest(), i4)), i4 = e4.min.subtract(t1.min), e4 = e4.max.subtract(t1.max);
+            return new p(this._rebound(i4.x, -e4.x), this._rebound(i4.y, -e4.y));
         },
-        _rebound: function(t1, i1) {
-            return 0 < t1 + i1 ? Math.round(t1 - i1) / 2 : Math.max(0, Math.ceil(t1)) - Math.max(0, Math.floor(i1));
+        _rebound: function(t1, e4) {
+            return 0 < t1 + e4 ? Math.round(t1 - e4) / 2 : Math.max(0, Math.ceil(t1)) - Math.max(0, Math.floor(e4));
         },
         _limitZoom: function(t1) {
-            var i1 = this.getMinZoom(), e1 = this.getMaxZoom(), n3 = vt ? this.options.zoomSnap : 1;
-            return n3 && (t1 = Math.round(t1 / n3) * n3), Math.max(i1, Math.min(e1, t1));
+            var e4 = this.getMinZoom(), i4 = this.getMaxZoom(), n4 = b.any3d ? this.options.zoomSnap : 1;
+            return n4 && (t1 = Math.round(t1 / n4) * n4), Math.max(e4, Math.min(i4, t1));
         },
         _onPanTransitionStep: function() {
             this.fire("move");
         },
         _onPanTransitionEnd: function() {
-            _i(this._mapPane, "leaflet-pan-anim"), this.fire("moveend");
+            z(this._mapPane, "leaflet-pan-anim"), this.fire("moveend");
         },
-        _tryAnimatedPan: function(t1, i1) {
-            var e1 = this._getCenterOffset(t1)._trunc();
-            return !(!0 !== (i1 && i1.animate) && !this.getSize().contains(e1)) && (this.panBy(e1, i1), !0);
+        _tryAnimatedPan: function(t1, e4) {
+            t1 = this._getCenterOffset(t1)._trunc();
+            return !(!0 !== (e4 && e4.animate) && !this.getSize().contains(t1)) && (this.panBy(t1, e4), !0);
         },
         _createAnimProxy: function() {
-            var t1 = this._proxy = si("div", "leaflet-proxy leaflet-zoom-animated");
+            var t1 = this._proxy = P("div", "leaflet-proxy leaflet-zoom-animated");
             this._panes.mapPane.appendChild(t1), this.on("zoomanim", function(t3) {
-                var i1 = ti, e1 = this._proxy.style[i1];
-                gi(this._proxy, this.project(t3.center, t3.zoom), this.getZoomScale(t3.zoom, 1)), e1 === this._proxy.style[i1] && this._animatingZoom && this._onZoomTransitionEnd();
+                var e4 = ue, i4 = this._proxy.style[e4];
+                be(this._proxy, this.project(t3.center, t3.zoom), this.getZoomScale(t3.zoom, 1)), i4 === this._proxy.style[e4] && this._animatingZoom && this._onZoomTransitionEnd();
             }, this), this.on("load moveend", this._animMoveEnd, this), this._on("unload", this._destroyAnimProxy, this);
         },
         _destroyAnimProxy: function() {
-            ri(this._proxy), this.off("load moveend", this._animMoveEnd, this), delete this._proxy;
+            T(this._proxy), this.off("load moveend", this._animMoveEnd, this), delete this._proxy;
         },
         _animMoveEnd: function() {
-            var t1 = this.getCenter(), i1 = this.getZoom();
-            gi(this._proxy, this.project(t1, i1), this.getZoomScale(i1, 1));
+            var t1 = this.getCenter(), e4 = this.getZoom();
+            be(this._proxy, this.project(t1, e4), this.getZoomScale(e4, 1));
         },
         _catchTransitionEnd: function(t1) {
             this._animatingZoom && 0 <= t1.propertyName.indexOf("transform") && this._onZoomTransitionEnd();
@@ -2260,32 +2293,33 @@ function fitBoundsPadding(e) {
         _nothingToAnimate: function() {
             return !this._container.getElementsByClassName("leaflet-zoom-animated").length;
         },
-        _tryAnimatedZoom: function(t1, i1, e1) {
-            if (this._animatingZoom) return !0;
-            if (e1 = e1 || {
-            }, !this._zoomAnimated || !1 === e1.animate || this._nothingToAnimate() || Math.abs(i1 - this._zoom) > this.options.zoomAnimationThreshold) return !1;
-            var n3 = this.getZoomScale(i1), o4 = this._getCenterOffset(t1)._divideBy(1 - 1 / n3);
-            return !(!0 !== e1.animate && !this.getSize().contains(o4)) && (M(function() {
-                this._moveStart(!0, !1)._animateZoom(t1, i1, !0);
-            }, this), !0);
+        _tryAnimatedZoom: function(t1, e4, i4) {
+            if (!this._animatingZoom) {
+                if (i4 = i4 || {
+                }, !this._zoomAnimated || !1 === i4.animate || this._nothingToAnimate() || Math.abs(e4 - this._zoom) > this.options.zoomAnimationThreshold) return !1;
+                var n4 = this.getZoomScale(e4), n4 = this._getCenterOffset(t1)._divideBy(1 - 1 / n4);
+                if (!0 !== i4.animate && !this.getSize().contains(n4)) return !1;
+                x(function() {
+                    this._moveStart(!0, i4.noMoveStart || !1)._animateZoom(t1, e4, !0);
+                }, this);
+            }
+            return !0;
         },
-        _animateZoom: function(t1, i1, e1, n3) {
-            this._mapPane && (e1 && (this._animatingZoom = !0, this._animateToCenter = t1, this._animateToZoom = i1, ci(this._mapPane, "leaflet-zoom-anim")), this.fire("zoomanim", {
+        _animateZoom: function(t1, e4, i4, n5) {
+            this._mapPane && (i4 && (this._animatingZoom = !0, this._animateToCenter = t1, this._animateToZoom = e4, M(this._mapPane, "leaflet-zoom-anim")), this.fire("zoomanim", {
                 center: t1,
-                zoom: i1,
-                noUpdate: n3
-            }), setTimeout(p(this._onZoomTransitionEnd, this), 250));
+                zoom: e4,
+                noUpdate: n5
+            }), this._tempFireZoomEvent || (this._tempFireZoomEvent = this._zoom !== this._animateToZoom), this._move(this._animateToCenter, this._animateToZoom, void 0, !0), setTimeout(a2(this._onZoomTransitionEnd, this), 250));
         },
         _onZoomTransitionEnd: function() {
-            this._animatingZoom && (this._mapPane && _i(this._mapPane, "leaflet-zoom-anim"), this._animatingZoom = !1, this._move(this._animateToCenter, this._animateToZoom), M(function() {
-                this._moveEnd(!0);
-            }, this));
+            this._animatingZoom && (this._mapPane && z(this._mapPane, "leaflet-zoom-anim"), this._animatingZoom = !1, this._move(this._animateToCenter, this._animateToZoom, void 0, !0), this._tempFireZoomEvent && this.fire("zoom"), delete this._tempFireZoomEvent, this.fire("move"), this._moveEnd(!0));
         }
     });
-    function Yi(t1) {
-        return new Xi(t1);
+    function Ue(t1) {
+        return new B(t1);
     }
-    var Xi = S.extend({
+    var B = et.extend({
         options: {
             position: "topright"
         },
@@ -2296,25 +2330,24 @@ function fitBoundsPadding(e) {
             return this.options.position;
         },
         setPosition: function(t1) {
-            var i1 = this._map;
-            return i1 && i1.removeControl(this), this.options.position = t1, i1 && i1.addControl(this), this;
+            var e4 = this._map;
+            return e4 && e4.removeControl(this), this.options.position = t1, e4 && e4.addControl(this), this;
         },
         getContainer: function() {
             return this._container;
         },
         addTo: function(t1) {
             this.remove(), this._map = t1;
-            var i1 = this._container = this.onAdd(t1), e1 = this.getPosition(), n3 = t1._controlCorners[e1];
-            return ci(i1, "leaflet-control"), -1 !== e1.indexOf("bottom") ? n3.insertBefore(i1, n3.firstChild) : n3.appendChild(i1), this._map.on("unload", this.remove, this), this;
+            var e4 = this._container = this.onAdd(t1), i4 = this.getPosition(), t1 = t1._controlCorners[i4];
+            return M(e4, "leaflet-control"), -1 !== i4.indexOf("bottom") ? t1.insertBefore(e4, t1.firstChild) : t1.appendChild(e4), this._map.on("unload", this.remove, this), this;
         },
         remove: function() {
-            return this._map && (ri(this._container), this.onRemove && this.onRemove(this._map), this._map.off("unload", this.remove, this), this._map = null), this;
+            return this._map && (T(this._container), this.onRemove && this.onRemove(this._map), this._map.off("unload", this.remove, this), this._map = null), this;
         },
         _refocusOnMap: function(t1) {
             this._map && t1 && 0 < t1.screenX && 0 < t1.screenY && this._map.getContainer().focus();
         }
-    });
-    Ki.include({
+    }), Ve = (A.include({
         addControl: function(t1) {
             return t1.addTo(this), this;
         },
@@ -2322,145 +2355,146 @@ function fitBoundsPadding(e) {
             return t1.remove(), this;
         },
         _initControlPos: function() {
-            var n3 = this._controlCorners = {
-            }, o4 = "leaflet-", s4 = this._controlContainer = si("div", o4 + "control-container", this._container);
-            function t1(t3, i1) {
-                var e1 = o4 + t3 + " " + o4 + i1;
-                n3[t3 + i1] = si("div", e1, s4);
+            var i4 = this._controlCorners = {
+            }, n5 = "leaflet-", o3 = this._controlContainer = P("div", n5 + "control-container", this._container);
+            function t1(t3, e4) {
+                i4[t3 + e4] = P("div", n5 + t3 + " " + n5 + e4, o3);
             }
             t1("top", "left"), t1("top", "right"), t1("bottom", "left"), t1("bottom", "right");
         },
         _clearControlPos: function() {
-            for(var t1 in this._controlCorners)ri(this._controlCorners[t1]);
-            ri(this._controlContainer), delete this._controlCorners, delete this._controlContainer;
+            for(var t1 in this._controlCorners)T(this._controlCorners[t1]);
+            T(this._controlContainer), delete this._controlCorners, delete this._controlContainer;
         }
-    });
-    var Ji = Xi.extend({
+    }), B.extend({
         options: {
             collapsed: !0,
             position: "topright",
             autoZIndex: !0,
             hideSingleBase: !1,
             sortLayers: !1,
-            sortFunction: function(t1, i1, e1, n3) {
-                return e1 < n3 ? -1 : n3 < e1 ? 1 : 0;
+            sortFunction: function(t1, e4, i4, n5) {
+                return i4 < n5 ? -1 : n5 < i4 ? 1 : 0;
             }
         },
-        initialize: function(t1, i1, e1) {
-            for(var n3 in c(this, e1), this._layerControlInputs = [], this._layers = [], this._lastZIndex = 0, this._handlingClick = !1, t1)this._addLayer(t1[n3], n3);
-            for(n3 in i1)this._addLayer(i1[n3], n3, !0);
+        initialize: function(t1, e4, i4) {
+            for(var n5 in c(this, i4), this._layerControlInputs = [], this._layers = [], this._lastZIndex = 0, this._handlingClick = !1, this._preventClick = !1, t1)this._addLayer(t1[n5], n5);
+            for(n5 in e4)this._addLayer(e4[n5], n5, !0);
         },
         onAdd: function(t1) {
             this._initLayout(), this._update(), (this._map = t1).on("zoomend", this._checkDisabledLayers, this);
-            for(var i1 = 0; i1 < this._layers.length; i1++)this._layers[i1].layer.on("add remove", this._onLayerChange, this);
+            for(var e4 = 0; e4 < this._layers.length; e4++)this._layers[e4].layer.on("add remove", this._onLayerChange, this);
             return this._container;
         },
         addTo: function(t1) {
-            return Xi.prototype.addTo.call(this, t1), this._expandIfNotCollapsed();
+            return B.prototype.addTo.call(this, t1), this._expandIfNotCollapsed();
         },
         onRemove: function() {
             this._map.off("zoomend", this._checkDisabledLayers, this);
             for(var t1 = 0; t1 < this._layers.length; t1++)this._layers[t1].layer.off("add remove", this._onLayerChange, this);
         },
-        addBaseLayer: function(t1, i1) {
-            return this._addLayer(t1, i1), this._map ? this._update() : this;
+        addBaseLayer: function(t1, e4) {
+            return this._addLayer(t1, e4), this._map ? this._update() : this;
         },
-        addOverlay: function(t1, i1) {
-            return this._addLayer(t1, i1, !0), this._map ? this._update() : this;
+        addOverlay: function(t1, e4) {
+            return this._addLayer(t1, e4, !0), this._map ? this._update() : this;
         },
         removeLayer: function(t1) {
             t1.off("add remove", this._onLayerChange, this);
-            var i1 = this._getLayer(m(t1));
-            return i1 && this._layers.splice(this._layers.indexOf(i1), 1), this._map ? this._update() : this;
+            t1 = this._getLayer(h(t1));
+            return t1 && this._layers.splice(this._layers.indexOf(t1), 1), this._map ? this._update() : this;
         },
         expand: function() {
-            ci(this._container, "leaflet-control-layers-expanded"), this._section.style.height = null;
+            M(this._container, "leaflet-control-layers-expanded"), this._section.style.height = null;
             var t1 = this._map.getSize().y - (this._container.offsetTop + 50);
-            return t1 < this._section.clientHeight ? (ci(this._section, "leaflet-control-layers-scrollbar"), this._section.style.height = t1 + "px") : _i(this._section, "leaflet-control-layers-scrollbar"), this._checkDisabledLayers(), this;
+            return t1 < this._section.clientHeight ? (M(this._section, "leaflet-control-layers-scrollbar"), this._section.style.height = t1 + "px") : z(this._section, "leaflet-control-layers-scrollbar"), this._checkDisabledLayers(), this;
         },
         collapse: function() {
-            return _i(this._container, "leaflet-control-layers-expanded"), this;
+            return z(this._container, "leaflet-control-layers-expanded"), this;
         },
         _initLayout: function() {
-            var t1 = "leaflet-control-layers", i1 = this._container = si("div", t1), e1 = this.options.collapsed;
-            i1.setAttribute("aria-haspopup", !0), Oi(i1), Ii(i1);
-            var n3 = this._section = si("section", t1 + "-list");
-            e1 && (this._map.on("click", this.collapse, this), ot || zi(i1, {
-                mouseenter: this.expand,
+            var t1 = "leaflet-control-layers", e4 = this._container = P("div", t1), i4 = this.options.collapsed, n5 = (e4.setAttribute("aria-haspopup", !0), Ie(e4), Be(e4), this._section = P("section", t1 + "-list")), o3 = (i4 && (this._map.on("click", this.collapse, this), S(e4, {
+                mouseenter: this._expandSafely,
                 mouseleave: this.collapse
-            }, this));
-            var o4 = this._layersLink = si("a", t1 + "-toggle", i1);
-            o4.href = "#", o4.title = "Layers", bt ? (zi(o4, "click", Ni), zi(o4, "click", this.expand, this)) : zi(o4, "focus", this.expand, this), e1 || this.expand(), this._baseLayersList = si("div", t1 + "-base", n3), this._separator = si("div", t1 + "-separator", n3), this._overlaysList = si("div", t1 + "-overlays", n3), i1.appendChild(n3);
+            }, this)), this._layersLink = P("a", t1 + "-toggle", e4));
+            o3.href = "#", o3.title = "Layers", o3.setAttribute("role", "button"), S(o3, {
+                keydown: function(t3) {
+                    13 === t3.keyCode && this._expandSafely();
+                },
+                click: function(t3) {
+                    O(t3), this._expandSafely();
+                }
+            }, this), i4 || this.expand(), this._baseLayersList = P("div", t1 + "-base", n5), this._separator = P("div", t1 + "-separator", n5), this._overlaysList = P("div", t1 + "-overlays", n5), e4.appendChild(n5);
         },
         _getLayer: function(t1) {
-            for(var i1 = 0; i1 < this._layers.length; i1++)if (this._layers[i1] && m(this._layers[i1].layer) === t1) return this._layers[i1];
+            for(var e4 = 0; e4 < this._layers.length; e4++)if (this._layers[e4] && h(this._layers[e4].layer) === t1) return this._layers[e4];
         },
-        _addLayer: function(t1, i1, e1) {
+        _addLayer: function(t1, e4, i4) {
             this._map && t1.on("add remove", this._onLayerChange, this), this._layers.push({
                 layer: t1,
-                name: i1,
-                overlay: e1
-            }), this.options.sortLayers && this._layers.sort(p(function(t3, i4) {
-                return this.options.sortFunction(t3.layer, i4.layer, t3.name, i4.name);
+                name: e4,
+                overlay: i4
+            }), this.options.sortLayers && this._layers.sort(a2(function(t3, e5) {
+                return this.options.sortFunction(t3.layer, e5.layer, t3.name, e5.name);
             }, this)), this.options.autoZIndex && t1.setZIndex && (this._lastZIndex++, t1.setZIndex(this._lastZIndex)), this._expandIfNotCollapsed();
         },
         _update: function() {
-            if (!this._container) return this;
-            ai(this._baseLayersList), ai(this._overlaysList), this._layerControlInputs = [];
-            for(var t1, i1, e1, n3 = 0, o4 = 0; o4 < this._layers.length; o4++)e1 = this._layers[o4], this._addItem(e1), i1 = i1 || e1.overlay, t1 = t1 || !e1.overlay, n3 += e1.overlay ? 0 : 1;
-            return this.options.hideSingleBase && (t1 = t1 && 1 < n3, this._baseLayersList.style.display = t1 ? "" : "none"), this._separator.style.display = i1 && t1 ? "" : "none", this;
+            if (this._container) {
+                me(this._baseLayersList), me(this._overlaysList), this._layerControlInputs = [];
+                for(var t1, e4, i4, n5 = 0, o3 = 0; o3 < this._layers.length; o3++)i4 = this._layers[o3], this._addItem(i4), e4 = e4 || i4.overlay, t1 = t1 || !i4.overlay, n5 += i4.overlay ? 0 : 1;
+                this.options.hideSingleBase && (this._baseLayersList.style.display = (t1 = t1 && 1 < n5) ? "" : "none"), this._separator.style.display = e4 && t1 ? "" : "none";
+            }
+            return this;
         },
-        _onLayerChange: function(t1) {
+        _onLayerChange: function(t3) {
             this._handlingClick || this._update();
-            var i1 = this._getLayer(m(t1.target)), e1 = i1.overlay ? "add" === t1.type ? "overlayadd" : "overlayremove" : "add" === t1.type ? "baselayerchange" : null;
-            e1 && this._map.fire(e1, i1);
+            var e5 = this._getLayer(h(t3.target)), t3 = e5.overlay ? "add" === t3.type ? "overlayadd" : "overlayremove" : "add" === t3.type ? "baselayerchange" : null;
+            t3 && this._map.fire(t3, e5);
         },
-        _createRadioElement: function(t1, i1) {
-            var e1 = '<input type="radio" class="leaflet-control-layers-selector" name="' + t1 + '"' + (i1 ? ' checked="checked"' : "") + "/>", n3 = document.createElement("div");
-            return n3.innerHTML = e1, n3.firstChild;
+        _createRadioElement: function(t3, e5) {
+            t3 = '<input type="radio" class="leaflet-control-layers-selector" name="' + t3 + '"' + (e5 ? ' checked="checked"' : "") + "/>", e5 = document.createElement("div");
+            return e5.innerHTML = t3, e5.firstChild;
         },
-        _addItem: function(t1) {
-            var i1, e1 = document.createElement("label"), n3 = this._map.hasLayer(t1.layer);
-            t1.overlay ? ((i1 = document.createElement("input")).type = "checkbox", i1.className = "leaflet-control-layers-selector", i1.defaultChecked = n3) : i1 = this._createRadioElement("leaflet-base-layers_" + m(this), n3), this._layerControlInputs.push(i1), i1.layerId = m(t1.layer), zi(i1, "click", this._onInputClick, this);
-            var o4 = document.createElement("span");
-            o4.innerHTML = " " + t1.name;
-            var s4 = document.createElement("div");
-            return e1.appendChild(s4), s4.appendChild(i1), s4.appendChild(o4), (t1.overlay ? this._overlaysList : this._baseLayersList).appendChild(e1), this._checkDisabledLayers(), e1;
+        _addItem: function(t3) {
+            var e5, i5 = document.createElement("label"), n6 = this._map.hasLayer(t3.layer), n6 = (t3.overlay ? ((e5 = document.createElement("input")).type = "checkbox", e5.className = "leaflet-control-layers-selector", e5.defaultChecked = n6) : e5 = this._createRadioElement("leaflet-base-layers_" + h(this), n6), this._layerControlInputs.push(e5), e5.layerId = h(t3.layer), S(e5, "click", this._onInputClick, this), document.createElement("span")), o4 = (n6.innerHTML = " " + t3.name, document.createElement("span"));
+            return i5.appendChild(o4), o4.appendChild(e5), o4.appendChild(n6), (t3.overlay ? this._overlaysList : this._baseLayersList).appendChild(i5), this._checkDisabledLayers(), i5;
         },
         _onInputClick: function() {
-            var t1, i1, e1 = this._layerControlInputs, n3 = [], o4 = [];
-            this._handlingClick = !0;
-            for(var s4 = e1.length - 1; 0 <= s4; s4--)t1 = e1[s4], i1 = this._getLayer(t1.layerId).layer, t1.checked ? n3.push(i1) : t1.checked || o4.push(i1);
-            for(s4 = 0; s4 < o4.length; s4++)this._map.hasLayer(o4[s4]) && this._map.removeLayer(o4[s4]);
-            for(s4 = 0; s4 < n3.length; s4++)this._map.hasLayer(n3[s4]) || this._map.addLayer(n3[s4]);
-            this._handlingClick = !1, this._refocusOnMap();
+            if (!this._preventClick) {
+                var t3, e5, i5 = this._layerControlInputs, n6 = [], o4 = [];
+                this._handlingClick = !0;
+                for(var s3 = i5.length - 1; 0 <= s3; s3--)t3 = i5[s3], e5 = this._getLayer(t3.layerId).layer, t3.checked ? n6.push(e5) : t3.checked || o4.push(e5);
+                for(s3 = 0; s3 < o4.length; s3++)this._map.hasLayer(o4[s3]) && this._map.removeLayer(o4[s3]);
+                for(s3 = 0; s3 < n6.length; s3++)this._map.hasLayer(n6[s3]) || this._map.addLayer(n6[s3]);
+                this._handlingClick = !1, this._refocusOnMap();
+            }
         },
         _checkDisabledLayers: function() {
-            for(var t1, i1, e1 = this._layerControlInputs, n3 = this._map.getZoom(), o4 = e1.length - 1; 0 <= o4; o4--)t1 = e1[o4], i1 = this._getLayer(t1.layerId).layer, t1.disabled = (void 0) !== i1.options.minZoom && n3 < i1.options.minZoom || (void 0) !== i1.options.maxZoom && n3 > i1.options.maxZoom;
+            for(var t4, e6, i6 = this._layerControlInputs, n7 = this._map.getZoom(), o5 = i6.length - 1; 0 <= o5; o5--)t4 = i6[o5], e6 = this._getLayer(t4.layerId).layer, t4.disabled = (void 0) !== e6.options.minZoom && n7 < e6.options.minZoom || (void 0) !== e6.options.maxZoom && n7 > e6.options.maxZoom;
         },
         _expandIfNotCollapsed: function() {
             return this._map && !this.options.collapsed && this.expand(), this;
         },
-        _expand: function() {
-            return this.expand();
-        },
-        _collapse: function() {
-            return this.collapse();
+        _expandSafely: function() {
+            var t4 = this._section, e6 = (this._preventClick = !0, S(t4, "click", O), this.expand(), this);
+            setTimeout(function() {
+                k(t4, "click", O), e6._preventClick = !1;
+            });
         }
-    }), $i = Xi.extend({
+    })), qe = B.extend({
         options: {
             position: "topleft",
-            zoomInText: "+",
+            zoomInText: '<span aria-hidden="true">+</span>',
             zoomInTitle: "Zoom in",
-            zoomOutText: "&#x2212;",
+            zoomOutText: '<span aria-hidden="true">&#x2212;</span>',
             zoomOutTitle: "Zoom out"
         },
-        onAdd: function(t1) {
-            var i1 = "leaflet-control-zoom", e1 = si("div", i1 + " leaflet-bar"), n3 = this.options;
-            return this._zoomInButton = this._createButton(n3.zoomInText, n3.zoomInTitle, i1 + "-in", e1, this._zoomIn), this._zoomOutButton = this._createButton(n3.zoomOutText, n3.zoomOutTitle, i1 + "-out", e1, this._zoomOut), this._updateDisabled(), t1.on("zoomend zoomlevelschange", this._updateDisabled, this), e1;
+        onAdd: function(t4) {
+            var e6 = "leaflet-control-zoom", i6 = P("div", e6 + " leaflet-bar"), n7 = this.options;
+            return this._zoomInButton = this._createButton(n7.zoomInText, n7.zoomInTitle, e6 + "-in", i6, this._zoomIn), this._zoomOutButton = this._createButton(n7.zoomOutText, n7.zoomOutTitle, e6 + "-out", i6, this._zoomOut), this._updateDisabled(), t4.on("zoomend zoomlevelschange", this._updateDisabled, this), i6;
         },
-        onRemove: function(t1) {
-            t1.off("zoomend zoomlevelschange", this._updateDisabled, this);
+        onRemove: function(t4) {
+            t4.off("zoomend zoomlevelschange", this._updateDisabled, this);
         },
         disable: function() {
             return this._disabled = !0, this._updateDisabled(), this;
@@ -2468,119 +2502,122 @@ function fitBoundsPadding(e) {
         enable: function() {
             return this._disabled = !1, this._updateDisabled(), this;
         },
-        _zoomIn: function(t1) {
-            !this._disabled && this._map._zoom < this._map.getMaxZoom() && this._map.zoomIn(this._map.options.zoomDelta * (t1.shiftKey ? 3 : 1));
+        _zoomIn: function(t4) {
+            !this._disabled && this._map._zoom < this._map.getMaxZoom() && this._map.zoomIn(this._map.options.zoomDelta * (t4.shiftKey ? 3 : 1));
         },
-        _zoomOut: function(t1) {
-            !this._disabled && this._map._zoom > this._map.getMinZoom() && this._map.zoomOut(this._map.options.zoomDelta * (t1.shiftKey ? 3 : 1));
+        _zoomOut: function(t4) {
+            !this._disabled && this._map._zoom > this._map.getMinZoom() && this._map.zoomOut(this._map.options.zoomDelta * (t4.shiftKey ? 3 : 1));
         },
-        _createButton: function(t1, i1, e1, n3, o4) {
-            var s4 = si("a", e1, n3);
-            return s4.innerHTML = t1, s4.href = "#", s4.title = i1, s4.setAttribute("role", "button"), s4.setAttribute("aria-label", i1), Oi(s4), zi(s4, "click", Ni), zi(s4, "click", o4, this), zi(s4, "click", this._refocusOnMap, this), s4;
+        _createButton: function(t4, e6, i6, n7, o5) {
+            i6 = P("a", i6, n7);
+            return i6.innerHTML = t4, i6.href = "#", i6.title = e6, i6.setAttribute("role", "button"), i6.setAttribute("aria-label", e6), Ie(i6), S(i6, "click", Re), S(i6, "click", o5, this), S(i6, "click", this._refocusOnMap, this), i6;
         },
         _updateDisabled: function() {
-            var t1 = this._map, i1 = "leaflet-disabled";
-            _i(this._zoomInButton, i1), _i(this._zoomOutButton, i1), !this._disabled && t1._zoom !== t1.getMinZoom() || ci(this._zoomOutButton, i1), !this._disabled && t1._zoom !== t1.getMaxZoom() || ci(this._zoomInButton, i1);
+            var t4 = this._map, e6 = "leaflet-disabled";
+            z(this._zoomInButton, e6), z(this._zoomOutButton, e6), this._zoomInButton.setAttribute("aria-disabled", "false"), this._zoomOutButton.setAttribute("aria-disabled", "false"), !this._disabled && t4._zoom !== t4.getMinZoom() || (M(this._zoomOutButton, e6), this._zoomOutButton.setAttribute("aria-disabled", "true")), !this._disabled && t4._zoom !== t4.getMaxZoom() || (M(this._zoomInButton, e6), this._zoomInButton.setAttribute("aria-disabled", "true"));
         }
-    });
-    Ki.mergeOptions({
+    }), Ge = (A.mergeOptions({
         zoomControl: !0
-    }), Ki.addInitHook(function() {
-        this.options.zoomControl && (this.zoomControl = new $i, this.addControl(this.zoomControl));
-    });
-    var Qi = Xi.extend({
+    }), A.addInitHook(function() {
+        this.options.zoomControl && (this.zoomControl = new qe, this.addControl(this.zoomControl));
+    }), B.extend({
         options: {
             position: "bottomleft",
             maxWidth: 100,
             metric: !0,
             imperial: !0
         },
-        onAdd: function(t1) {
-            var i1 = "leaflet-control-scale", e1 = si("div", i1), n3 = this.options;
-            return this._addScales(n3, i1 + "-line", e1), t1.on(n3.updateWhenIdle ? "moveend" : "move", this._update, this), t1.whenReady(this._update, this), e1;
+        onAdd: function(t4) {
+            var e6 = "leaflet-control-scale", i6 = P("div", e6), n7 = this.options;
+            return this._addScales(n7, e6 + "-line", i6), t4.on(n7.updateWhenIdle ? "moveend" : "move", this._update, this), t4.whenReady(this._update, this), i6;
         },
-        onRemove: function(t1) {
-            t1.off(this.options.updateWhenIdle ? "moveend" : "move", this._update, this);
+        onRemove: function(t4) {
+            t4.off(this.options.updateWhenIdle ? "moveend" : "move", this._update, this);
         },
-        _addScales: function(t1, i1, e1) {
-            t1.metric && (this._mScale = si("div", i1, e1)), t1.imperial && (this._iScale = si("div", i1, e1));
+        _addScales: function(t4, e6, i6) {
+            t4.metric && (this._mScale = P("div", e6, i6)), t4.imperial && (this._iScale = P("div", e6, i6));
         },
         _update: function() {
-            var t1 = this._map, i1 = t1.getSize().y / 2, e1 = t1.distance(t1.containerPointToLatLng([
+            var t4 = this._map, e6 = t4.getSize().y / 2, t4 = t4.distance(t4.containerPointToLatLng([
                 0,
-                i1
-            ]), t1.containerPointToLatLng([
+                e6
+            ]), t4.containerPointToLatLng([
                 this.options.maxWidth,
-                i1
+                e6
             ]));
-            this._updateScales(e1);
+            this._updateScales(t4);
         },
-        _updateScales: function(t1) {
-            this.options.metric && t1 && this._updateMetric(t1), this.options.imperial && t1 && this._updateImperial(t1);
+        _updateScales: function(t4) {
+            this.options.metric && t4 && this._updateMetric(t4), this.options.imperial && t4 && this._updateImperial(t4);
         },
-        _updateMetric: function(t1) {
-            var i1 = this._getRoundNum(t1), e1 = i1 < 1000 ? i1 + " m" : i1 / 1000 + " km";
-            this._updateScale(this._mScale, e1, i1 / t1);
+        _updateMetric: function(t4) {
+            var e6 = this._getRoundNum(t4);
+            this._updateScale(this._mScale, e6 < 1000 ? e6 + " m" : e6 / 1000 + " km", e6 / t4);
         },
-        _updateImperial: function(t1) {
-            var i1, e1, n3, o4 = 3.2808399 * t1;
-            5280 < o4 ? (i1 = o4 / 5280, e1 = this._getRoundNum(i1), this._updateScale(this._iScale, e1 + " mi", e1 / i1)) : (n3 = this._getRoundNum(o4), this._updateScale(this._iScale, n3 + " ft", n3 / o4));
+        _updateImperial: function(t4) {
+            var e6, i6, t4 = 3.2808399 * t4;
+            5280 < t4 ? (i6 = this._getRoundNum(e6 = t4 / 5280), this._updateScale(this._iScale, i6 + " mi", i6 / e6)) : (i6 = this._getRoundNum(t4), this._updateScale(this._iScale, i6 + " ft", i6 / t4));
         },
-        _updateScale: function(t1, i1, e1) {
-            t1.style.width = Math.round(this.options.maxWidth * e1) + "px", t1.innerHTML = i1;
+        _updateScale: function(t4, e6, i6) {
+            t4.style.width = Math.round(this.options.maxWidth * i6) + "px", t4.innerHTML = e6;
         },
-        _getRoundNum: function(t1) {
-            var i1 = Math.pow(10, (Math.floor(t1) + "").length - 1), e1 = t1 / i1;
-            return i1 * (e1 = 10 <= e1 ? 10 : 5 <= e1 ? 5 : 3 <= e1 ? 3 : 2 <= e1 ? 2 : 1);
+        _getRoundNum: function(t4) {
+            var e6 = Math.pow(10, (Math.floor(t4) + "").length - 1), t4 = t4 / e6;
+            return e6 * (t4 = 10 <= t4 ? 10 : 5 <= t4 ? 5 : 3 <= t4 ? 3 : 2 <= t4 ? 2 : 1);
         }
-    }), te = Xi.extend({
+    })), Ke = B.extend({
         options: {
             position: "bottomright",
-            prefix: '<a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a>'
+            prefix: '<a href="https://leafletjs.com" title="A JavaScript library for interactive maps">' + (b.inlineSvg ? '<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="12" height="8" viewBox="0 0 12 8" class="leaflet-attribution-flag"><path fill="#4C7BE1" d="M0 0h12v4H0z"/><path fill="#FFD500" d="M0 4h12v3H0z"/><path fill="#E0BC00" d="M0 7h12v1H0z"/></svg> ' : "") + "Leaflet</a>"
         },
-        initialize: function(t1) {
-            c(this, t1), this._attributions = {
+        initialize: function(t4) {
+            c(this, t4), this._attributions = {
             };
         },
-        onAdd: function(t1) {
-            for(var i1 in (t1.attributionControl = this)._container = si("div", "leaflet-control-attribution"), Oi(this._container), t1._layers)t1._layers[i1].getAttribution && this.addAttribution(t1._layers[i1].getAttribution());
-            return this._update(), this._container;
+        onAdd: function(t4) {
+            for(var e6 in (t4.attributionControl = this)._container = P("div", "leaflet-control-attribution"), Ie(this._container), t4._layers)t4._layers[e6].getAttribution && this.addAttribution(t4._layers[e6].getAttribution());
+            return this._update(), t4.on("layeradd", this._addAttribution, this), this._container;
         },
-        setPrefix: function(t1) {
-            return this.options.prefix = t1, this._update(), this;
+        onRemove: function(t4) {
+            t4.off("layeradd", this._addAttribution, this);
         },
-        addAttribution: function(t1) {
-            return t1 && (this._attributions[t1] || (this._attributions[t1] = 0), this._attributions[t1]++, this._update()), this;
+        _addAttribution: function(t4) {
+            t4.layer.getAttribution && (this.addAttribution(t4.layer.getAttribution()), t4.layer.once("remove", function() {
+                this.removeAttribution(t4.layer.getAttribution());
+            }, this));
         },
-        removeAttribution: function(t1) {
-            return t1 && this._attributions[t1] && (this._attributions[t1]--, this._update()), this;
+        setPrefix: function(t4) {
+            return this.options.prefix = t4, this._update(), this;
+        },
+        addAttribution: function(t4) {
+            return t4 && (this._attributions[t4] || (this._attributions[t4] = 0), this._attributions[t4]++, this._update()), this;
+        },
+        removeAttribution: function(t4) {
+            return t4 && this._attributions[t4] && (this._attributions[t4]--, this._update()), this;
         },
         _update: function() {
             if (this._map) {
-                var t1 = [];
-                for(var i1 in this._attributions)this._attributions[i1] && t1.push(i1);
-                var e1 = [];
-                this.options.prefix && e1.push(this.options.prefix), t1.length && e1.push(t1.join(", ")), this._container.innerHTML = e1.join(" | ");
+                var t4, e6 = [];
+                for(t4 in this._attributions)this._attributions[t4] && e6.push(t4);
+                var i6 = [];
+                this.options.prefix && i6.push(this.options.prefix), e6.length && i6.push(e6.join(", ")), this._container.innerHTML = i6.join(' <span aria-hidden="true">|</span> ');
             }
         }
-    });
-    Ki.mergeOptions({
+    }), n7 = (A.mergeOptions({
         attributionControl: !0
-    }), Ki.addInitHook(function() {
-        this.options.attributionControl && (new te).addTo(this);
-    });
-    Xi.Layers = Ji, Xi.Zoom = $i, Xi.Scale = Qi, Xi.Attribution = te, Yi.layers = function(t3, i4, e3) {
-        return new Ji(t3, i4, e3);
-    }, Yi.zoom = function(t3) {
-        return new $i(t3);
-    }, Yi.scale = function(t3) {
-        return new Qi(t3);
-    }, Yi.attribution = function(t3) {
-        return new te(t3);
-    };
-    var ie = S.extend({
-        initialize: function(t3) {
-            this._map = t3;
+    }), A.addInitHook(function() {
+        this.options.attributionControl && (new Ke).addTo(this);
+    }), B.Layers = Ve, B.Zoom = qe, B.Scale = Ge, B.Attribution = Ke, Ue.layers = function(t5, e7, i7) {
+        return new Ve(t5, e7, i7);
+    }, Ue.zoom = function(t5) {
+        return new qe(t5);
+    }, Ue.scale = function(t5) {
+        return new Ge(t5);
+    }, Ue.attribution = function(t5) {
+        return new Ke(t5);
+    }, et.extend({
+        initialize: function(t5) {
+            this._map = t5;
         },
         enable: function() {
             return this._enabled || (this._enabled = !0, this.addHooks()), this;
@@ -2591,338 +2628,392 @@ function fitBoundsPadding(e) {
         enabled: function() {
             return !!this._enabled;
         }
-    });
-    ie.addTo = function(t3, i4) {
-        return t3.addHandler(i4, this), this;
-    };
-    var ee, ne = {
-        Events: Z
-    }, oe = bt ? "touchstart mousedown" : "mousedown", se = {
-        mousedown: "mouseup",
-        touchstart: "touchend",
-        pointerdown: "touchend",
-        MSPointerDown: "touchend"
-    }, re = {
-        mousedown: "mousemove",
-        touchstart: "touchmove",
-        pointerdown: "touchmove",
-        MSPointerDown: "touchmove"
-    }, ae = E.extend({
+    })), ft = (n7.addTo = function(t5, e7) {
+        return t5.addHandler(e7, this), this;
+    }, {
+        Events: e2
+    }), Ye = b.touch ? "touchstart mousedown" : "mousedown", Xe = it.extend({
         options: {
             clickTolerance: 3
         },
-        initialize: function(t3, i4, e3, n3) {
-            c(this, n3), this._element = t3, this._dragStartTarget = i4 || t3, this._preventOutline = e3;
+        initialize: function(t5, e7, i7, n8) {
+            c(this, n8), this._element = t5, this._dragStartTarget = e7 || t5, this._preventOutline = i7;
         },
         enable: function() {
-            this._enabled || (zi(this._dragStartTarget, oe, this._onDown, this), this._enabled = !0);
+            this._enabled || (S(this._dragStartTarget, Ye, this._onDown, this), this._enabled = !0);
         },
         disable: function() {
-            this._enabled && (ae._dragging === this && this.finishDrag(), Si(this._dragStartTarget, oe, this._onDown, this), this._enabled = !1, this._moved = !1);
+            this._enabled && (Xe._dragging === this && this.finishDrag(!0), k(this._dragStartTarget, Ye, this._onDown, this), this._enabled = !1, this._moved = !1);
         },
-        _onDown: function(t3) {
-            var i4, e3;
-            !t3._simulated && this._enabled && (this._moved = !1, li(this._element, "leaflet-zoom-anim") || ae._dragging || t3.shiftKey || 1 !== t3.which && 1 !== t3.button && !t3.touches || ((ae._dragging = this)._preventOutline && Pi(this._element), xi(), Xt(), this._moving || (this.fire("down"), i4 = t3.touches ? t3.touches[0] : t3, e3 = bi(this._element), this._startPoint = new k(i4.clientX, i4.clientY), this._parentScale = Ti(e3), zi(document, re[t3.type], this._onMove, this), zi(document, se[t3.type], this._onUp, this))));
+        _onDown: function(t5) {
+            var e7, i7;
+            this._enabled && (this._moved = !1, ve(this._element, "leaflet-zoom-anim") || (t5.touches && 1 !== t5.touches.length ? Xe._dragging === this && this.finishDrag() : Xe._dragging || t5.shiftKey || 1 !== t5.which && 1 !== t5.button && !t5.touches || ((Xe._dragging = this)._preventOutline && Me(this._element), Le(), re(), this._moving || (this.fire("down"), i7 = t5.touches ? t5.touches[0] : t5, e7 = Ce(this._element), this._startPoint = new p(i7.clientX, i7.clientY), this._startPos = Pe(this._element), this._parentScale = Ze(e7), i7 = "mousedown" === t5.type, S(document, i7 ? "mousemove" : "touchmove", this._onMove, this), S(document, i7 ? "mouseup" : "touchend touchcancel", this._onUp, this)))));
         },
-        _onMove: function(t3) {
-            var i4, e3;
-            !t3._simulated && this._enabled && (t3.touches && 1 < t3.touches.length ? this._moved = !0 : ((e3 = new k((i4 = t3.touches && 1 === t3.touches.length ? t3.touches[0] : t3).clientX, i4.clientY)._subtract(this._startPoint)).x || e3.y) && (Math.abs(e3.x) + Math.abs(e3.y) < this.options.clickTolerance || (e3.x /= this._parentScale.x, e3.y /= this._parentScale.y, Ri(t3), this._moved || (this.fire("dragstart"), this._moved = !0, this._startPos = yi(this._element).subtract(e3), ci(document.body, "leaflet-dragging"), this._lastTarget = t3.target || t3.srcElement, window.SVGElementInstance && this._lastTarget instanceof window.SVGElementInstance && (this._lastTarget = this._lastTarget.correspondingUseElement), ci(this._lastTarget, "leaflet-drag-target")), this._newPos = this._startPos.add(e3), this._moving = !0, z(this._animRequest), this._lastEvent = t3, this._animRequest = M(this._updatePosition, this, !0))));
+        _onMove: function(t5) {
+            var e7;
+            this._enabled && (t5.touches && 1 < t5.touches.length ? this._moved = !0 : !(e7 = new p((e7 = t5.touches && 1 === t5.touches.length ? t5.touches[0] : t5).clientX, e7.clientY)._subtract(this._startPoint)).x && !e7.y || Math.abs(e7.x) + Math.abs(e7.y) < this.options.clickTolerance || (e7.x /= this._parentScale.x, e7.y /= this._parentScale.y, O(t5), this._moved || (this.fire("dragstart"), this._moved = !0, M(document.body, "leaflet-dragging"), this._lastTarget = t5.target || t5.srcElement, window.SVGElementInstance && this._lastTarget instanceof window.SVGElementInstance && (this._lastTarget = this._lastTarget.correspondingUseElement), M(this._lastTarget, "leaflet-drag-target")), this._newPos = this._startPos.add(e7), this._moving = !0, this._lastEvent = t5, this._updatePosition()));
         },
         _updatePosition: function() {
-            var t3 = {
+            var t5 = {
                 originalEvent: this._lastEvent
             };
-            this.fire("predrag", t3), vi(this._element, this._newPos), this.fire("drag", t3);
+            this.fire("predrag", t5), Z(this._element, this._newPos), this.fire("drag", t5);
         },
-        _onUp: function(t3) {
-            !t3._simulated && this._enabled && this.finishDrag();
+        _onUp: function() {
+            this._enabled && this.finishDrag();
         },
-        finishDrag: function() {
-            for(var t3 in _i(document.body, "leaflet-dragging"), this._lastTarget && (_i(this._lastTarget, "leaflet-drag-target"), this._lastTarget = null), re)Si(document, re[t3], this._onMove, this), Si(document, se[t3], this._onUp, this);
-            wi(), Jt(), this._moved && this._moving && (z(this._animRequest), this.fire("dragend", {
+        finishDrag: function(t5) {
+            z(document.body, "leaflet-dragging"), this._lastTarget && (z(this._lastTarget, "leaflet-drag-target"), this._lastTarget = null), k(document, "mousemove touchmove", this._onMove, this), k(document, "mouseup touchend touchcancel", this._onUp, this), Te(), ae();
+            var e7 = this._moved && this._moving;
+            this._moving = !1, Xe._dragging = !1, e7 && this.fire("dragend", {
+                noInertia: t5,
                 distance: this._newPos.distanceTo(this._startPos)
-            })), this._moving = !1, ae._dragging = !1;
+            });
         }
     });
-    function he(t3, i4) {
-        if (!i4 || !t3.length) return t3.slice();
-        var e3 = i4 * i4;
-        return t3 = (function(t4, i5) {
-            var e4 = t4.length, n3 = new (typeof Uint8Array != "undefined" ? Uint8Array : Array)(e4);
-            n3[0] = n3[e4 - 1] = 1, (function t5(i6, e5, n5, o4, s4) {
-                var r5, a4, h1, u1 = 0;
-                for(a4 = o4 + 1; a4 <= s4 - 1; a4++)h1 = de(i6[a4], i6[o4], i6[s4], !0), u1 < h1 && (r5 = a4, u1 = h1);
-                n5 < u1 && (e5[r5] = 1, t5(i6, e5, n5, o4, r5), t5(i6, e5, n5, r5, s4));
-            })(t4, n3, i5, 0, e4 - 1);
-            var o4, s4 = [];
-            for(o4 = 0; o4 < e4; o4++)n3[o4] && s4.push(t4[o4]);
-            return s4;
-        })(t3 = function(t4, i5) {
-            for(var e4 = [
-                t4[0]
-            ], n3 = 1, o4 = 0, s4 = t4.length; n3 < s4; n3++)(function(t5, i6) {
-                var e5 = i6.x - t5.x, n5 = i6.y - t5.y;
-                return e5 * e5 + n5 * n5;
-            })(t4[n3], t4[o4]) > i5 && (e4.push(t4[n3]), o4 = n3);
-            o4 < s4 - 1 && e4.push(t4[s4 - 1]);
-            return e4;
-        }(t3, e3), e3);
-    }
-    function ue(t3, i4, e3) {
-        return Math.sqrt(de(t3, i4, e3, !0));
-    }
-    function le(t3, i4, e3, n3, o4) {
-        var s4, r5, a4, h1 = n3 ? ee : _e(t3, e3), u1 = _e(i4, e3);
-        for(ee = u1;;){
-            if (!(h1 | u1)) return [
-                t3,
-                i4
-            ];
-            if (h1 & u1) return !1;
-            a4 = _e(r5 = ce(t3, i4, s4 = h1 || u1, e3, o4), e3), s4 === h1 ? (t3 = r5, h1 = a4) : (i4 = r5, u1 = a4);
-        }
-    }
-    function ce(t3, i4, e3, n3, o4) {
-        var s4, r5, a4 = i4.x - t3.x, h1 = i4.y - t3.y, u1 = n3.min, l1 = n3.max;
-        return 8 & e3 ? (s4 = t3.x + a4 * (l1.y - t3.y) / h1, r5 = l1.y) : 4 & e3 ? (s4 = t3.x + a4 * (u1.y - t3.y) / h1, r5 = u1.y) : 2 & e3 ? (s4 = l1.x, r5 = t3.y + h1 * (l1.x - t3.x) / a4) : 1 & e3 && (s4 = u1.x, r5 = t3.y + h1 * (u1.x - t3.x) / a4), new k(s4, r5, o4);
-    }
-    function _e(t3, i4) {
-        var e3 = 0;
-        return t3.x < i4.min.x ? e3 |= 1 : t3.x > i4.max.x && (e3 |= 2), t3.y < i4.min.y ? e3 |= 4 : t3.y > i4.max.y && (e3 |= 8), e3;
-    }
-    function de(t3, i4, e3, n3) {
-        var o4, s4 = i4.x, r5 = i4.y, a4 = e3.x - s4, h1 = e3.y - r5, u1 = a4 * a4 + h1 * h1;
-        return 0 < u1 && (1 < (o4 = ((t3.x - s4) * a4 + (t3.y - r5) * h1) / u1) ? (s4 = e3.x, r5 = e3.y) : 0 < o4 && (s4 += a4 * o4, r5 += h1 * o4)), a4 = t3.x - s4, h1 = t3.y - r5, n3 ? a4 * a4 + h1 * h1 : new k(s4, r5);
-    }
-    function pe(t3) {
-        return !g(t3[0]) || "object" != typeof t3[0][0] && (void 0) !== t3[0][0];
-    }
-    function me(t3) {
-        return console.warn("Deprecated use of _flat, please use L.LineUtil.isFlat instead."), pe(t3);
-    }
-    var fe = {
-        simplify: he,
-        pointToSegmentDistance: ue,
-        closestPointOnSegment: function(t3, i4, e3) {
-            return de(t3, i4, e3);
-        },
-        clipSegment: le,
-        _getEdgeIntersection: ce,
-        _getBitCode: _e,
-        _sqClosestPointOnSegment: de,
-        isFlat: pe,
-        _flat: me
-    };
-    function ge(t3, i4, e3) {
-        for(var n3, o4, s4, r5, a4, h1, u1, l1 = [
+    function Je(t5, e7, i7) {
+        for(var n8, o5, s4, r6, a4, h3, l1, u1 = [
             1,
             4,
             2,
             8
-        ], c1 = 0, _1 = t3.length; c1 < _1; c1++)t3[c1]._code = _e(t3[c1], i4);
+        ], c1 = 0, d1 = t5.length; c1 < d1; c1++)t5[c1]._code = si(t5[c1], e7);
         for(s4 = 0; s4 < 4; s4++){
-            for(h1 = l1[s4], n3 = [], c1 = 0, o4 = (_1 = t3.length) - 1; c1 < _1; o4 = c1++)r5 = t3[c1], a4 = t3[o4], r5._code & h1 ? a4._code & h1 || ((u1 = ce(a4, r5, h1, i4, e3))._code = _e(u1, i4), n3.push(u1)) : (a4._code & h1 && ((u1 = ce(a4, r5, h1, i4, e3))._code = _e(u1, i4), n3.push(u1)), n3.push(r5));
-            t3 = n3;
+            for(h3 = u1[s4], n8 = [], c1 = 0, o5 = (d1 = t5.length) - 1; c1 < d1; o5 = c1++)r6 = t5[c1], a4 = t5[o5], r6._code & h3 ? a4._code & h3 || ((l1 = oi(a4, r6, h3, e7, i7))._code = si(l1, e7), n8.push(l1)) : (a4._code & h3 && ((l1 = oi(a4, r6, h3, e7, i7))._code = si(l1, e7), n8.push(l1)), n8.push(r6));
+            t5 = n8;
         }
-        return t3;
+        return t5;
     }
-    var ve, ye = {
-        clipPolygon: ge
-    }, xe = {
-        project: function(t3) {
-            return new k(t3.lng, t3.lat);
+    function $e(t5, e7) {
+        var i7, n8, o5, s4, r6, a4, h3;
+        if (!t5 || 0 === t5.length) throw new Error("latlngs not passed");
+        I(t5) || (console.warn("latlngs are not flat! Only the first ring will be used"), t5 = t5[0]);
+        for(var l1 = w([
+            0,
+            0
+        ]), u1 = g(t5), c1 = (u1.getNorthWest().distanceTo(u1.getSouthWest()) * u1.getNorthEast().distanceTo(u1.getNorthWest()) < 1700 && (l1 = Qe(t5)), t5.length), d1 = [], _1 = 0; _1 < c1; _1++){
+            var p1 = w(t5[_1]);
+            d1.push(e7.project(w([
+                p1.lat - l1.lat,
+                p1.lng - l1.lng
+            ])));
+        }
+        for(_1 = r6 = a4 = h3 = 0, i7 = c1 - 1; _1 < c1; i7 = _1++)n8 = d1[_1], o5 = d1[i7], s4 = n8.y * o5.x - o5.y * n8.x, a4 += (n8.x + o5.x) * s4, h3 += (n8.y + o5.y) * s4, r6 += 3 * s4;
+        u1 = 0 === r6 ? d1[0] : [
+            a4 / r6,
+            h3 / r6
+        ], u1 = e7.unproject(m(u1));
+        return w([
+            u1.lat + l1.lat,
+            u1.lng + l1.lng
+        ]);
+    }
+    function Qe(t5) {
+        for(var e7 = 0, i7 = 0, n8 = 0, o5 = 0; o5 < t5.length; o5++){
+            var s4 = w(t5[o5]);
+            e7 += s4.lat, i7 += s4.lng, n8++;
+        }
+        return w([
+            e7 / n8,
+            i7 / n8
+        ]);
+    }
+    var ti, gt = {
+        __proto__: null,
+        clipPolygon: Je,
+        polygonCenter: $e,
+        centroid: Qe
+    };
+    function ei(t5, e7) {
+        if (e7 && t5.length) {
+            var i7 = t5 = function(t6, e8) {
+                for(var i8 = [
+                    t6[0]
+                ], n8 = 1, o5 = 0, s5 = t6.length; n8 < s5; n8++)(function(t7, e9) {
+                    var i9 = e9.x - t7.x, e9 = e9.y - t7.y;
+                    return i9 * i9 + e9 * e9;
+                })(t6[n8], t6[o5]) > e8 && (i8.push(t6[n8]), o5 = n8);
+                o5 < s5 - 1 && i8.push(t6[s5 - 1]);
+                return i8;
+            }(t5, e7 = e7 * e7), n8 = i7.length, o5 = new (typeof Uint8Array != "undefined" ? Uint8Array : Array)(n8);
+            o5[0] = o5[n8 - 1] = 1, (function t6(e8, i8, n9, o6, s5) {
+                var r6, a4, h3, l1 = 0;
+                for(a4 = o6 + 1; a4 <= s5 - 1; a4++)h3 = ri(e8[a4], e8[o6], e8[s5], !0), l1 < h3 && (r6 = a4, l1 = h3);
+                n9 < l1 && (i8[r6] = 1, t6(e8, i8, n9, o6, r6), t6(e8, i8, n9, r6, s5));
+            })(i7, o5, e7, 0, n8 - 1);
+            var s5, r6 = [];
+            for(s5 = 0; s5 < n8; s5++)o5[s5] && r6.push(i7[s5]);
+            return r6;
+        }
+        return t5.slice();
+    }
+    function ii(t5, e7, i8) {
+        return Math.sqrt(ri(t5, e7, i8, !0));
+    }
+    function ni(t5, e7, i8, n9, o6) {
+        var s6, r7, a4, h3 = n9 ? ti : si(t5, i8), l1 = si(e7, i8);
+        for(ti = l1;;){
+            if (!(h3 | l1)) return [
+                t5,
+                e7
+            ];
+            if (h3 & l1) return !1;
+            a4 = si(r7 = oi(t5, e7, s6 = h3 || l1, i8, o6), i8), s6 === h3 ? (t5 = r7, h3 = a4) : (e7 = r7, l1 = a4);
+        }
+    }
+    function oi(t5, e7, i8, n9, o6) {
+        var s6, r7, a4 = e7.x - t5.x, e7 = e7.y - t5.y, h3 = n9.min, n9 = n9.max;
+        return 8 & i8 ? (s6 = t5.x + a4 * (n9.y - t5.y) / e7, r7 = n9.y) : 4 & i8 ? (s6 = t5.x + a4 * (h3.y - t5.y) / e7, r7 = h3.y) : 2 & i8 ? (s6 = n9.x, r7 = t5.y + e7 * (n9.x - t5.x) / a4) : 1 & i8 && (s6 = h3.x, r7 = t5.y + e7 * (h3.x - t5.x) / a4), new p(s6, r7, o6);
+    }
+    function si(t5, e7) {
+        var i8 = 0;
+        return t5.x < e7.min.x ? i8 |= 1 : t5.x > e7.max.x && (i8 |= 2), t5.y < e7.min.y ? i8 |= 4 : t5.y > e7.max.y && (i8 |= 8), i8;
+    }
+    function ri(t5, e7, i8, n9) {
+        var o6 = e7.x, e7 = e7.y, s6 = i8.x - o6, r7 = i8.y - e7, a4 = s6 * s6 + r7 * r7;
+        return 0 < a4 && (1 < (a4 = ((t5.x - o6) * s6 + (t5.y - e7) * r7) / a4) ? (o6 = i8.x, e7 = i8.y) : 0 < a4 && (o6 += s6 * a4, e7 += r7 * a4)), s6 = t5.x - o6, r7 = t5.y - e7, n9 ? s6 * s6 + r7 * r7 : new p(o6, e7);
+    }
+    function I(t5) {
+        return !d(t5[0]) || "object" != typeof t5[0][0] && (void 0) !== t5[0][0];
+    }
+    function ai(t5) {
+        return console.warn("Deprecated use of _flat, please use L.LineUtil.isFlat instead."), I(t5);
+    }
+    function hi(t5, e7) {
+        var i8, n9, o6, s6, r7, a4;
+        if (!t5 || 0 === t5.length) throw new Error("latlngs not passed");
+        I(t5) || (console.warn("latlngs are not flat! Only the first ring will be used"), t5 = t5[0]);
+        for(var h3 = w([
+            0,
+            0
+        ]), l1 = g(t5), u1 = (l1.getNorthWest().distanceTo(l1.getSouthWest()) * l1.getNorthEast().distanceTo(l1.getNorthWest()) < 1700 && (h3 = Qe(t5)), t5.length), c1 = [], d1 = 0; d1 < u1; d1++){
+            var _1 = w(t5[d1]);
+            c1.push(e7.project(w([
+                _1.lat - h3.lat,
+                _1.lng - h3.lng
+            ])));
+        }
+        for(i8 = d1 = 0; d1 < u1 - 1; d1++)i8 += c1[d1].distanceTo(c1[d1 + 1]) / 2;
+        if (0 === i8) a4 = c1[0];
+        else for(n9 = d1 = 0; d1 < u1 - 1; d1++)if (o6 = c1[d1], s6 = c1[d1 + 1], i8 < (n9 += r7 = o6.distanceTo(s6))) {
+            a4 = [
+                s6.x - (r7 = (n9 - i8) / r7) * (s6.x - o6.x),
+                s6.y - r7 * (s6.y - o6.y)
+            ];
+            break;
+        }
+        l1 = e7.unproject(m(a4));
+        return w([
+            l1.lat + h3.lat,
+            l1.lng + h3.lng
+        ]);
+    }
+    var vt = {
+        __proto__: null,
+        simplify: ei,
+        pointToSegmentDistance: ii,
+        closestPointOnSegment: function(t5, e7, i8) {
+            return ri(t5, e7, i8);
         },
-        unproject: function(t3) {
-            return new D(t3.y, t3.x);
+        clipSegment: ni,
+        _getEdgeIntersection: oi,
+        _getBitCode: si,
+        _sqClosestPointOnSegment: ri,
+        isFlat: I,
+        _flat: ai,
+        polylineCenter: hi
+    }, yt = {
+        project: function(t5) {
+            return new p(t5.lng, t5.lat);
         },
-        bounds: new I([
+        unproject: function(t5) {
+            return new v(t5.y, t5.x);
+        },
+        bounds: new f([
             -180,
             -90
         ], [
             180,
             90
         ])
-    }, we = {
+    }, xt = {
         R: 6378137,
         R_MINOR: 6356752.314245179,
-        bounds: new I([
+        bounds: new f([
             -20037508.34279,
             -15496570.73972
         ], [
             20037508.34279,
             18764656.23138
         ]),
-        project: function(t3) {
-            var i4 = Math.PI / 180, e3 = this.R, n3 = t3.lat * i4, o4 = this.R_MINOR / e3, s4 = Math.sqrt(1 - o4 * o4), r5 = s4 * Math.sin(n3), a4 = Math.tan(Math.PI / 4 - n3 / 2) / Math.pow((1 - r5) / (1 + r5), s4 / 2), n3 = -e3 * Math.log(Math.max(a4, 0.0000000001));
-            return new k(t3.lng * i4 * e3, n3);
+        project: function(t5) {
+            var e7 = Math.PI / 180, i8 = this.R, n9 = t5.lat * e7, o6 = this.R_MINOR / i8, o6 = Math.sqrt(1 - o6 * o6), s6 = o6 * Math.sin(n9), s6 = Math.tan(Math.PI / 4 - n9 / 2) / Math.pow((1 - s6) / (1 + s6), o6 / 2), n9 = -i8 * Math.log(Math.max(s6, 0.0000000001));
+            return new p(t5.lng * e7 * i8, n9);
         },
-        unproject: function(t3) {
-            for(var i4, e3 = 180 / Math.PI, n3 = this.R, o4 = this.R_MINOR / n3, s4 = Math.sqrt(1 - o4 * o4), r5 = Math.exp(-t3.y / n3), a4 = Math.PI / 2 - 2 * Math.atan(r5), h1 = 0, u1 = 0.1; h1 < 15 && 0.0000001 < Math.abs(u1); h1++)i4 = s4 * Math.sin(a4), i4 = Math.pow((1 - i4) / (1 + i4), s4 / 2), a4 += u1 = Math.PI / 2 - 2 * Math.atan(r5 * i4) - a4;
-            return new D(a4 * e3, t3.x * e3 / n3);
+        unproject: function(t5) {
+            for(var e7, i8 = 180 / Math.PI, n9 = this.R, o6 = this.R_MINOR / n9, s6 = Math.sqrt(1 - o6 * o6), r7 = Math.exp(-t5.y / n9), a4 = Math.PI / 2 - 2 * Math.atan(r7), h3 = 0, l1 = 0.1; h3 < 15 && 0.0000001 < Math.abs(l1); h3++)e7 = s6 * Math.sin(a4), e7 = Math.pow((1 - e7) / (1 + e7), s6 / 2), a4 += l1 = Math.PI / 2 - 2 * Math.atan(r7 * e7) - a4;
+            return new v(a4 * i8, t5.x * i8 / n9);
         }
-    }, Pe = {
-        LonLat: xe,
-        Mercator: we,
-        SphericalMercator: V
-    }, Le = h({
-    }, F, {
+    }, wt = {
+        __proto__: null,
+        LonLat: yt,
+        Mercator: xt,
+        SphericalMercator: rt
+    }, Pt = l({
+    }, st, {
         code: "EPSG:3395",
-        projection: we,
-        transformation: G(ve = 0.5 / (Math.PI * we.R), 0.5, -ve, 0.5)
-    }), be = h({
-    }, F, {
+        projection: xt,
+        transformation: ht(bt = 0.5 / (Math.PI * xt.R), 0.5, -bt, 0.5)
+    }), li = l({
+    }, st, {
         code: "EPSG:4326",
-        projection: xe,
-        transformation: G(1 / 180, 1, -1 / 180, 0.5)
-    }), Te = h({
-    }, H, {
-        projection: xe,
-        transformation: G(1, 0, -1, 0),
-        scale: function(t3) {
-            return Math.pow(2, t3);
+        projection: yt,
+        transformation: ht(1 / 180, 1, -1 / 180, 0.5)
+    }), Lt = l({
+    }, ot, {
+        projection: yt,
+        transformation: ht(1, 0, -1, 0),
+        scale: function(t5) {
+            return Math.pow(2, t5);
         },
-        zoom: function(t3) {
-            return Math.log(t3) / Math.LN2;
+        zoom: function(t5) {
+            return Math.log(t5) / Math.LN2;
         },
-        distance: function(t3, i4) {
-            var e3 = i4.lng - t3.lng, n3 = i4.lat - t3.lat;
-            return Math.sqrt(e3 * e3 + n3 * n3);
+        distance: function(t5, e7) {
+            var i8 = e7.lng - t5.lng, e7 = e7.lat - t5.lat;
+            return Math.sqrt(i8 * i8 + e7 * e7);
         },
         infinite: !0
-    });
-    H.Earth = F, H.EPSG3395 = Le, H.EPSG3857 = Y, H.EPSG900913 = X, H.EPSG4326 = be, H.Simple = Te;
-    var Me = E.extend({
+    }), o6 = (ot.Earth = st, ot.EPSG3395 = Pt, ot.EPSG3857 = lt, ot.EPSG900913 = ut, ot.EPSG4326 = li, ot.Simple = Lt, it.extend({
         options: {
             pane: "overlayPane",
             attribution: null,
             bubblingMouseEvents: !0
         },
-        addTo: function(t3) {
-            return t3.addLayer(this), this;
+        addTo: function(t5) {
+            return t5.addLayer(this), this;
         },
         remove: function() {
             return this.removeFrom(this._map || this._mapToAdd);
         },
-        removeFrom: function(t3) {
-            return t3 && t3.removeLayer(this), this;
+        removeFrom: function(t5) {
+            return t5 && t5.removeLayer(this), this;
         },
-        getPane: function(t3) {
-            return this._map.getPane(t3 ? this.options[t3] || t3 : this.options.pane);
+        getPane: function(t5) {
+            return this._map.getPane(t5 ? this.options[t5] || t5 : this.options.pane);
         },
-        addInteractiveTarget: function(t3) {
-            return this._map._targets[m(t3)] = this;
+        addInteractiveTarget: function(t5) {
+            return this._map._targets[h(t5)] = this;
         },
-        removeInteractiveTarget: function(t3) {
-            return delete this._map._targets[m(t3)], this;
+        removeInteractiveTarget: function(t5) {
+            return delete this._map._targets[h(t5)], this;
         },
         getAttribution: function() {
             return this.options.attribution;
         },
-        _layerAdd: function(t3) {
-            var i4, e3 = t3.target;
-            e3.hasLayer(this) && (this._map = e3, this._zoomAnimated = e3._zoomAnimated, this.getEvents && (i4 = this.getEvents(), e3.on(i4, this), this.once("remove", function() {
-                e3.off(i4, this);
-            }, this)), this.onAdd(e3), this.getAttribution && e3.attributionControl && e3.attributionControl.addAttribution(this.getAttribution()), this.fire("add"), e3.fire("layeradd", {
+        _layerAdd: function(t5) {
+            var e7, i8 = t5.target;
+            i8.hasLayer(this) && (this._map = i8, this._zoomAnimated = i8._zoomAnimated, this.getEvents && (e7 = this.getEvents(), i8.on(e7, this), this.once("remove", function() {
+                i8.off(e7, this);
+            }, this)), this.onAdd(i8), this.fire("add"), i8.fire("layeradd", {
                 layer: this
             }));
         }
-    });
-    Ki.include({
-        addLayer: function(t3) {
-            if (!t3._layerAdd) throw new Error("The provided object is not a Layer.");
-            var i4 = m(t3);
-            return this._layers[i4] || ((this._layers[i4] = t3)._mapToAdd = this, t3.beforeAdd && t3.beforeAdd(this), this.whenReady(t3._layerAdd, t3)), this;
+    })), ui = (A.include({
+        addLayer: function(t5) {
+            var e7;
+            if (t5._layerAdd) return e7 = h(t5), this._layers[e7] || ((this._layers[e7] = t5)._mapToAdd = this, t5.beforeAdd && t5.beforeAdd(this), this.whenReady(t5._layerAdd, t5)), this;
+            throw new Error("The provided object is not a Layer.");
         },
-        removeLayer: function(t3) {
-            var i4 = m(t3);
-            return this._layers[i4] && (this._loaded && t3.onRemove(this), t3.getAttribution && this.attributionControl && this.attributionControl.removeAttribution(t3.getAttribution()), delete this._layers[i4], this._loaded && (this.fire("layerremove", {
-                layer: t3
-            }), t3.fire("remove")), t3._map = t3._mapToAdd = null), this;
+        removeLayer: function(t5) {
+            var e7 = h(t5);
+            return this._layers[e7] && (this._loaded && t5.onRemove(this), delete this._layers[e7], this._loaded && (this.fire("layerremove", {
+                layer: t5
+            }), t5.fire("remove")), t5._map = t5._mapToAdd = null), this;
         },
-        hasLayer: function(t3) {
-            return !!t3 && m(t3) in this._layers;
+        hasLayer: function(t5) {
+            return h(t5) in this._layers;
         },
-        eachLayer: function(t3, i4) {
-            for(var e3 in this._layers)t3.call(i4, this._layers[e3]);
+        eachLayer: function(t5, e7) {
+            for(var i8 in this._layers)t5.call(e7, this._layers[i8]);
             return this;
         },
-        _addLayers: function(t3) {
-            for(var i4 = 0, e3 = (t3 = t3 ? g(t3) ? t3 : [
-                t3
-            ] : []).length; i4 < e3; i4++)this.addLayer(t3[i4]);
+        _addLayers: function(t5) {
+            for(var e7 = 0, i8 = (t5 = t5 ? d(t5) ? t5 : [
+                t5
+            ] : []).length; e7 < i8; e7++)this.addLayer(t5[e7]);
         },
-        _addZoomLimit: function(t3) {
-            !isNaN(t3.options.maxZoom) && isNaN(t3.options.minZoom) || (this._zoomBoundLayers[m(t3)] = t3, this._updateZoomLevels());
+        _addZoomLimit: function(t5) {
+            isNaN(t5.options.maxZoom) && isNaN(t5.options.minZoom) || (this._zoomBoundLayers[h(t5)] = t5, this._updateZoomLevels());
         },
-        _removeZoomLimit: function(t3) {
-            var i4 = m(t3);
-            this._zoomBoundLayers[i4] && (delete this._zoomBoundLayers[i4], this._updateZoomLevels());
+        _removeZoomLimit: function(t5) {
+            t5 = h(t5);
+            this._zoomBoundLayers[t5] && (delete this._zoomBoundLayers[t5], this._updateZoomLevels());
         },
         _updateZoomLevels: function() {
-            var t3 = 1 / 0, i4 = -1 / 0, e3 = this._getZoomSpan();
-            for(var n3 in this._zoomBoundLayers)var o4 = this._zoomBoundLayers[n3].options, t3 = (void 0) === o4.minZoom ? t3 : Math.min(t3, o4.minZoom), i4 = (void 0) === o4.maxZoom ? i4 : Math.max(i4, o4.maxZoom);
-            this._layersMaxZoom = i4 === -1 / 0 ? void 0 : i4, this._layersMinZoom = t3 === 1 / 0 ? void 0 : t3, e3 !== this._getZoomSpan() && this.fire("zoomlevelschange"), (void 0) === this.options.maxZoom && this._layersMaxZoom && this.getZoom() > this._layersMaxZoom && this.setZoom(this._layersMaxZoom), (void 0) === this.options.minZoom && this._layersMinZoom && this.getZoom() < this._layersMinZoom && this.setZoom(this._layersMinZoom);
+            var t5, e7 = 1 / 0, i8 = -1 / 0, n9 = this._getZoomSpan();
+            for(t5 in this._zoomBoundLayers)var o7 = this._zoomBoundLayers[t5].options, e7 = (void 0) === o7.minZoom ? e7 : Math.min(e7, o7.minZoom), i8 = (void 0) === o7.maxZoom ? i8 : Math.max(i8, o7.maxZoom);
+            this._layersMaxZoom = i8 === -1 / 0 ? void 0 : i8, this._layersMinZoom = e7 === 1 / 0 ? void 0 : e7, n9 !== this._getZoomSpan() && this.fire("zoomlevelschange"), (void 0) === this.options.maxZoom && this._layersMaxZoom && this.getZoom() > this._layersMaxZoom && this.setZoom(this._layersMaxZoom), (void 0) === this.options.minZoom && this._layersMinZoom && this.getZoom() < this._layersMinZoom && this.setZoom(this._layersMinZoom);
         }
-    });
-    var ze = Me.extend({
-        initialize: function(t3, i4) {
-            var e3, n3;
-            if (c(this, i4), this._layers = {
-            }, t3) for(e3 = 0, n3 = t3.length; e3 < n3; e3++)this.addLayer(t3[e3]);
+    }), o6.extend({
+        initialize: function(t5, e7) {
+            var i8, n9;
+            if (c(this, e7), this._layers = {
+            }, t5) for(i8 = 0, n9 = t5.length; i8 < n9; i8++)this.addLayer(t5[i8]);
         },
-        addLayer: function(t3) {
-            var i4 = this.getLayerId(t3);
-            return this._layers[i4] = t3, this._map && this._map.addLayer(t3), this;
+        addLayer: function(t5) {
+            var e7 = this.getLayerId(t5);
+            return this._layers[e7] = t5, this._map && this._map.addLayer(t5), this;
         },
-        removeLayer: function(t3) {
-            var i4 = t3 in this._layers ? t3 : this.getLayerId(t3);
-            return this._map && this._layers[i4] && this._map.removeLayer(this._layers[i4]), delete this._layers[i4], this;
+        removeLayer: function(t5) {
+            t5 = t5 in this._layers ? t5 : this.getLayerId(t5);
+            return this._map && this._layers[t5] && this._map.removeLayer(this._layers[t5]), delete this._layers[t5], this;
         },
-        hasLayer: function(t3) {
-            return !!t3 && ("number" == typeof t3 ? t3 : this.getLayerId(t3)) in this._layers;
+        hasLayer: function(t5) {
+            return ("number" == typeof t5 ? t5 : this.getLayerId(t5)) in this._layers;
         },
         clearLayers: function() {
             return this.eachLayer(this.removeLayer, this);
         },
-        invoke: function(t3) {
-            var i4, e3, n3 = Array.prototype.slice.call(arguments, 1);
-            for(i4 in this._layers)(e3 = this._layers[i4])[t3] && e3[t3].apply(e3, n3);
+        invoke: function(t5) {
+            var e7, i8, n9 = Array.prototype.slice.call(arguments, 1);
+            for(e7 in this._layers)(i8 = this._layers[e7])[t5] && i8[t5].apply(i8, n9);
             return this;
         },
-        onAdd: function(t3) {
-            this.eachLayer(t3.addLayer, t3);
+        onAdd: function(t5) {
+            this.eachLayer(t5.addLayer, t5);
         },
-        onRemove: function(t3) {
-            this.eachLayer(t3.removeLayer, t3);
+        onRemove: function(t5) {
+            this.eachLayer(t5.removeLayer, t5);
         },
-        eachLayer: function(t3, i4) {
-            for(var e3 in this._layers)t3.call(i4, this._layers[e3]);
+        eachLayer: function(t5, e7) {
+            for(var i8 in this._layers)t5.call(e7, this._layers[i8]);
             return this;
         },
-        getLayer: function(t3) {
-            return this._layers[t3];
+        getLayer: function(t5) {
+            return this._layers[t5];
         },
         getLayers: function() {
-            var t3 = [];
-            return this.eachLayer(t3.push, t3), t3;
+            var t5 = [];
+            return this.eachLayer(t5.push, t5), t5;
         },
-        setZIndex: function(t3) {
-            return this.invoke("setZIndex", t3);
+        setZIndex: function(t5) {
+            return this.invoke("setZIndex", t5);
         },
-        getLayerId: m
-    }), Ce = ze.extend({
-        addLayer: function(t3) {
-            return this.hasLayer(t3) ? this : (t3.addEventParent(this), ze.prototype.addLayer.call(this, t3), this.fire("layeradd", {
-                layer: t3
+        getLayerId: h
+    })), ci = ui.extend({
+        addLayer: function(t5) {
+            return this.hasLayer(t5) ? this : (t5.addEventParent(this), ui.prototype.addLayer.call(this, t5), this.fire("layeradd", {
+                layer: t5
             }));
         },
-        removeLayer: function(t3) {
-            return this.hasLayer(t3) ? (t3 in this._layers && (t3 = this._layers[t3]), t3.removeEventParent(this), ze.prototype.removeLayer.call(this, t3), this.fire("layerremove", {
-                layer: t3
+        removeLayer: function(t5) {
+            return this.hasLayer(t5) ? ((t5 = t5 in this._layers ? this._layers[t5] : t5).removeEventParent(this), ui.prototype.removeLayer.call(this, t5), this.fire("layerremove", {
+                layer: t5
             })) : this;
         },
-        setStyle: function(t3) {
-            return this.invoke("setStyle", t3);
+        setStyle: function(t5) {
+            return this.invoke("setStyle", t5);
         },
         bringToFront: function() {
             return this.invoke("bringToFront");
@@ -2931,14 +3022,14 @@ function fitBoundsPadding(e) {
             return this.invoke("bringToBack");
         },
         getBounds: function() {
-            var t3 = new R;
-            for(var i4 in this._layers){
-                var e3 = this._layers[i4];
-                t3.extend(e3.getBounds ? e3.getBounds() : e3.getLatLng());
+            var t5, e7 = new s;
+            for(t5 in this._layers){
+                var i8 = this._layers[t5];
+                e7.extend(i8.getBounds ? i8.getBounds() : i8.getLatLng());
             }
-            return t3;
+            return e7;
         }
-    }), Se = S.extend({
+    }), di = et.extend({
         options: {
             popupAnchor: [
                 0,
@@ -2947,43 +3038,39 @@ function fitBoundsPadding(e) {
             tooltipAnchor: [
                 0,
                 0
-            ]
+            ],
+            crossOrigin: !1
         },
-        initialize: function(t3) {
-            c(this, t3);
+        initialize: function(t5) {
+            c(this, t5);
         },
-        createIcon: function(t3) {
-            return this._createIcon("icon", t3);
+        createIcon: function(t5) {
+            return this._createIcon("icon", t5);
         },
-        createShadow: function(t3) {
-            return this._createIcon("shadow", t3);
+        createShadow: function(t5) {
+            return this._createIcon("shadow", t5);
         },
-        _createIcon: function(t3, i4) {
-            var e4 = this._getIconUrl(t3);
-            if (!e4) {
-                if ("icon" === t3) throw new Error("iconUrl not set in Icon options (see the docs).");
-                return null;
-            }
-            var n3 = this._createImg(e4, i4 && "IMG" === i4.tagName ? i4 : null);
-            return this._setIconStyles(n3, t3), n3;
+        _createIcon: function(t5, e7) {
+            var i9 = this._getIconUrl(t5);
+            if (i9) return i9 = this._createImg(i9, e7 && "IMG" === e7.tagName ? e7 : null), this._setIconStyles(i9, t5), !this.options.crossOrigin && "" !== this.options.crossOrigin || (i9.crossOrigin = !0 === this.options.crossOrigin ? "" : this.options.crossOrigin), i9;
+            if ("icon" === t5) throw new Error("iconUrl not set in Icon options (see the docs).");
+            return null;
         },
-        _setIconStyles: function(t3, i4) {
-            var e4 = this.options, n3 = e4[i4 + "Size"];
-            "number" == typeof n3 && (n3 = [
-                n3,
-                n3
-            ]);
-            var o4 = A(n3), s4 = A("shadow" === i4 && e4.shadowAnchor || e4.iconAnchor || o4 && o4.divideBy(2, !0));
-            t3.className = "leaflet-marker-" + i4 + " " + (e4.className || ""), s4 && (t3.style.marginLeft = -s4.x + "px", t3.style.marginTop = -s4.y + "px"), o4 && (t3.style.width = o4.x + "px", t3.style.height = o4.y + "px");
+        _setIconStyles: function(t5, e7) {
+            var i9 = this.options, n9 = i9[e7 + "Size"], n9 = m(n9 = "number" == typeof n9 ? [
+                n9,
+                n9
+            ] : n9), o7 = m("shadow" === e7 && i9.shadowAnchor || i9.iconAnchor || n9 && n9.divideBy(2, !0));
+            t5.className = "leaflet-marker-" + e7 + " " + (i9.className || ""), o7 && (t5.style.marginLeft = -o7.x + "px", t5.style.marginTop = -o7.y + "px"), n9 && (t5.style.width = n9.x + "px", t5.style.height = n9.y + "px");
         },
-        _createImg: function(t3, i4) {
-            return (i4 = i4 || document.createElement("img")).src = t3, i4;
+        _createImg: function(t5, e7) {
+            return (e7 = e7 || document.createElement("img")).src = t5, e7;
         },
-        _getIconUrl: function(t3) {
-            return zt && this.options[t3 + "RetinaUrl"] || this.options[t3 + "Url"];
+        _getIconUrl: function(t5) {
+            return b.retina && this.options[t5 + "RetinaUrl"] || this.options[t5 + "Url"];
         }
     });
-    var Ze = Se.extend({
+    var _i = di.extend({
         options: {
             iconUrl: "marker-icon.png",
             iconRetinaUrl: "marker-icon-2x.png",
@@ -3009,25 +3096,31 @@ function fitBoundsPadding(e) {
                 41
             ]
         },
-        _getIconUrl: function(t3) {
-            return Ze.imagePath || (Ze.imagePath = this._detectIconPath()), (this.options.imagePath || Ze.imagePath) + Se.prototype._getIconUrl.call(this, t3);
+        _getIconUrl: function(t5) {
+            return "string" != typeof _i.imagePath && (_i.imagePath = this._detectIconPath()), (this.options.imagePath || _i.imagePath) + di.prototype._getIconUrl.call(this, t5);
+        },
+        _stripUrl: function(t5) {
+            function e7(t6, e8, i9) {
+                return (e8 = e8.exec(t6)) && e8[i9];
+            }
+            return (t5 = e7(t5, /^url\((['"])?(.+)\1\)$/, 2)) && e7(t5, /^(.*)marker-icon\.png$/, 1);
         },
         _detectIconPath: function() {
-            var t3 = si("div", "leaflet-default-icon-path", document.body), i4 = oi(t3, "background-image") || oi(t3, "backgroundImage");
-            return document.body.removeChild(t3), i4 = null === i4 || 0 !== i4.indexOf("url") ? "" : i4.replace(/^url\(["']?/, "").replace(/marker-icon\.png["']?\)$/, "");
+            var t5 = P("div", "leaflet-default-icon-path", document.body), e7 = pe(t5, "background-image") || pe(t5, "backgroundImage");
+            return document.body.removeChild(t5), (e7 = this._stripUrl(e7)) ? e7 : (t5 = document.querySelector('link[href$="leaflet.css"]')) ? t5.href.substring(0, t5.href.length - 11 - 1) : "";
         }
-    }), Ee = ie.extend({
-        initialize: function(t3) {
-            this._marker = t3;
+    }), pi = n7.extend({
+        initialize: function(t5) {
+            this._marker = t5;
         },
         addHooks: function() {
-            var t3 = this._marker._icon;
-            this._draggable || (this._draggable = new ae(t3, t3, !0)), this._draggable.on({
+            var t5 = this._marker._icon;
+            this._draggable || (this._draggable = new Xe(t5, t5, !0)), this._draggable.on({
                 dragstart: this._onDragStart,
                 predrag: this._onPreDrag,
                 drag: this._onDrag,
                 dragend: this._onDragEnd
-            }, this).enable(), ci(t3, "leaflet-marker-draggable");
+            }, this).enable(), M(t5, "leaflet-marker-draggable");
         },
         removeHooks: function() {
             this._draggable.off({
@@ -3035,37 +3128,37 @@ function fitBoundsPadding(e) {
                 predrag: this._onPreDrag,
                 drag: this._onDrag,
                 dragend: this._onDragEnd
-            }, this).disable(), this._marker._icon && _i(this._marker._icon, "leaflet-marker-draggable");
+            }, this).disable(), this._marker._icon && z(this._marker._icon, "leaflet-marker-draggable");
         },
         moved: function() {
             return this._draggable && this._draggable._moved;
         },
-        _adjustPan: function(t3) {
-            var i4, e4 = this._marker, n3 = e4._map, o4 = this._marker.options.autoPanSpeed, s4 = this._marker.options.autoPanPadding, r5 = yi(e4._icon), a4 = n3.getPixelBounds(), h1 = n3.getPixelOrigin(), u1 = O(a4.min._subtract(h1).add(s4), a4.max._subtract(h1).subtract(s4));
-            u1.contains(r5) || (i4 = A((Math.max(u1.max.x, r5.x) - u1.max.x) / (a4.max.x - u1.max.x) - (Math.min(u1.min.x, r5.x) - u1.min.x) / (a4.min.x - u1.min.x), (Math.max(u1.max.y, r5.y) - u1.max.y) / (a4.max.y - u1.max.y) - (Math.min(u1.min.y, r5.y) - u1.min.y) / (a4.min.y - u1.min.y)).multiplyBy(o4), n3.panBy(i4, {
+        _adjustPan: function(t5) {
+            var e7 = this._marker, i9 = e7._map, n9 = this._marker.options.autoPanSpeed, o7 = this._marker.options.autoPanPadding, s6 = Pe(e7._icon), r7 = i9.getPixelBounds(), a4 = i9.getPixelOrigin(), a4 = _(r7.min._subtract(a4).add(o7), r7.max._subtract(a4).subtract(o7));
+            a4.contains(s6) || (o7 = m((Math.max(a4.max.x, s6.x) - a4.max.x) / (r7.max.x - a4.max.x) - (Math.min(a4.min.x, s6.x) - a4.min.x) / (r7.min.x - a4.min.x), (Math.max(a4.max.y, s6.y) - a4.max.y) / (r7.max.y - a4.max.y) - (Math.min(a4.min.y, s6.y) - a4.min.y) / (r7.min.y - a4.min.y)).multiplyBy(n9), i9.panBy(o7, {
                 animate: !1
-            }), this._draggable._newPos._add(i4), this._draggable._startPos._add(i4), vi(e4._icon, this._draggable._newPos), this._onDrag(t3), this._panRequest = M(this._adjustPan.bind(this, t3)));
+            }), this._draggable._newPos._add(o7), this._draggable._startPos._add(o7), Z(e7._icon, this._draggable._newPos), this._onDrag(t5), this._panRequest = x(this._adjustPan.bind(this, t5)));
         },
         _onDragStart: function() {
             this._oldLatLng = this._marker.getLatLng(), this._marker.closePopup && this._marker.closePopup(), this._marker.fire("movestart").fire("dragstart");
         },
-        _onPreDrag: function(t3) {
-            this._marker.options.autoPan && (z(this._panRequest), this._panRequest = M(this._adjustPan.bind(this, t3)));
+        _onPreDrag: function(t5) {
+            this._marker.options.autoPan && (r(this._panRequest), this._panRequest = x(this._adjustPan.bind(this, t5)));
         },
-        _onDrag: function(t3) {
-            var i4 = this._marker, e4 = i4._shadow, n3 = yi(i4._icon), o4 = i4._map.layerPointToLatLng(n3);
-            e4 && vi(e4, n3), i4._latlng = o4, t3.latlng = o4, t3.oldLatLng = this._oldLatLng, i4.fire("move", t3).fire("drag", t3);
+        _onDrag: function(t5) {
+            var e7 = this._marker, i9 = e7._shadow, n9 = Pe(e7._icon), o7 = e7._map.layerPointToLatLng(n9);
+            i9 && Z(i9, n9), e7._latlng = o7, t5.latlng = o7, t5.oldLatLng = this._oldLatLng, e7.fire("move", t5).fire("drag", t5);
         },
-        _onDragEnd: function(t3) {
-            z(this._panRequest), delete this._oldLatLng, this._marker.fire("moveend").fire("dragend", t3);
+        _onDragEnd: function(t5) {
+            r(this._panRequest), delete this._oldLatLng, this._marker.fire("moveend").fire("dragend", t5);
         }
-    }), ke = Me.extend({
+    }), mi = o6.extend({
         options: {
-            icon: new Ze,
+            icon: new _i,
             interactive: !0,
             keyboard: !0,
             title: "",
-            alt: "",
+            alt: "Marker",
             zIndexOffset: 0,
             opacity: 1,
             riseOnHover: !1,
@@ -3073,6 +3166,7 @@ function fitBoundsPadding(e) {
             pane: "markerPane",
             shadowPane: "shadowPane",
             bubblingMouseEvents: !1,
+            autoPanOnFocus: !0,
             draggable: !1,
             autoPan: !1,
             autoPanPadding: [
@@ -3081,14 +3175,14 @@ function fitBoundsPadding(e) {
             ],
             autoPanSpeed: 10
         },
-        initialize: function(t3, i4) {
-            c(this, i4), this._latlng = j(t3);
+        initialize: function(t5, e7) {
+            c(this, e7), this._latlng = w(t5);
         },
-        onAdd: function(t3) {
-            this._zoomAnimated = this._zoomAnimated && t3.options.markerZoomAnimation, this._zoomAnimated && t3.on("zoomanim", this._animateZoom, this), this._initIcon(), this.update();
+        onAdd: function(t5) {
+            this._zoomAnimated = this._zoomAnimated && t5.options.markerZoomAnimation, this._zoomAnimated && t5.on("zoomanim", this._animateZoom, this), this._initIcon(), this.update();
         },
-        onRemove: function(t3) {
-            this.dragging && this.dragging.enabled() && (this.options.draggable = !0, this.dragging.removeHooks()), delete this.dragging, this._zoomAnimated && t3.off("zoomanim", this._animateZoom, this), this._removeIcon(), this._removeShadow();
+        onRemove: function(t5) {
+            this.dragging && this.dragging.enabled() && (this.options.draggable = !0, this.dragging.removeHooks()), delete this.dragging, this._zoomAnimated && t5.off("zoomanim", this._animateZoom, this), this._removeIcon(), this._removeShadow();
         },
         getEvents: function() {
             return {
@@ -3099,73 +3193,78 @@ function fitBoundsPadding(e) {
         getLatLng: function() {
             return this._latlng;
         },
-        setLatLng: function(t3) {
-            var i4 = this._latlng;
-            return this._latlng = j(t3), this.update(), this.fire("move", {
-                oldLatLng: i4,
+        setLatLng: function(t5) {
+            var e7 = this._latlng;
+            return this._latlng = w(t5), this.update(), this.fire("move", {
+                oldLatLng: e7,
                 latlng: this._latlng
             });
         },
-        setZIndexOffset: function(t3) {
-            return this.options.zIndexOffset = t3, this.update();
+        setZIndexOffset: function(t5) {
+            return this.options.zIndexOffset = t5, this.update();
         },
         getIcon: function() {
             return this.options.icon;
         },
-        setIcon: function(t3) {
-            return this.options.icon = t3, this._map && (this._initIcon(), this.update()), this._popup && this.bindPopup(this._popup, this._popup.options), this;
+        setIcon: function(t5) {
+            return this.options.icon = t5, this._map && (this._initIcon(), this.update()), this._popup && this.bindPopup(this._popup, this._popup.options), this;
         },
         getElement: function() {
             return this._icon;
         },
         update: function() {
-            var t3;
-            return this._icon && this._map && (t3 = this._map.latLngToLayerPoint(this._latlng).round(), this._setPos(t3)), this;
+            var t5;
+            return this._icon && this._map && (t5 = this._map.latLngToLayerPoint(this._latlng).round(), this._setPos(t5)), this;
         },
         _initIcon: function() {
-            var t3 = this.options, i4 = "leaflet-zoom-" + (this._zoomAnimated ? "animated" : "hide"), e4 = t3.icon.createIcon(this._icon), n3 = !1;
-            e4 !== this._icon && (this._icon && this._removeIcon(), n3 = !0, t3.title && (e4.title = t3.title), "IMG" === e4.tagName && (e4.alt = t3.alt || "")), ci(e4, i4), t3.keyboard && (e4.tabIndex = "0"), this._icon = e4, t3.riseOnHover && this.on({
+            var t5 = this.options, e7 = "leaflet-zoom-" + (this._zoomAnimated ? "animated" : "hide"), i9 = t5.icon.createIcon(this._icon), n9 = !1, i9 = (i9 !== this._icon && (this._icon && this._removeIcon(), n9 = !0, t5.title && (i9.title = t5.title), "IMG" === i9.tagName && (i9.alt = t5.alt || "")), M(i9, e7), t5.keyboard && (i9.tabIndex = "0", i9.setAttribute("role", "button")), this._icon = i9, t5.riseOnHover && this.on({
                 mouseover: this._bringToFront,
                 mouseout: this._resetZIndex
-            });
-            var o4 = t3.icon.createShadow(this._shadow), s4 = !1;
-            o4 !== this._shadow && (this._removeShadow(), s4 = !0), o4 && (ci(o4, i4), o4.alt = ""), this._shadow = o4, t3.opacity < 1 && this._updateOpacity(), n3 && this.getPane().appendChild(this._icon), this._initInteraction(), o4 && s4 && this.getPane(t3.shadowPane).appendChild(this._shadow);
+            }), this.options.autoPanOnFocus && S(i9, "focus", this._panOnFocus, this), t5.icon.createShadow(this._shadow)), o7 = !1;
+            i9 !== this._shadow && (this._removeShadow(), o7 = !0), i9 && (M(i9, e7), i9.alt = ""), this._shadow = i9, t5.opacity < 1 && this._updateOpacity(), n9 && this.getPane().appendChild(this._icon), this._initInteraction(), i9 && o7 && this.getPane(t5.shadowPane).appendChild(this._shadow);
         },
         _removeIcon: function() {
             this.options.riseOnHover && this.off({
                 mouseover: this._bringToFront,
                 mouseout: this._resetZIndex
-            }), ri(this._icon), this.removeInteractiveTarget(this._icon), this._icon = null;
+            }), this.options.autoPanOnFocus && k(this._icon, "focus", this._panOnFocus, this), T(this._icon), this.removeInteractiveTarget(this._icon), this._icon = null;
         },
         _removeShadow: function() {
-            this._shadow && ri(this._shadow), this._shadow = null;
+            this._shadow && T(this._shadow), this._shadow = null;
         },
-        _setPos: function(t3) {
-            this._icon && vi(this._icon, t3), this._shadow && vi(this._shadow, t3), this._zIndex = t3.y + this.options.zIndexOffset, this._resetZIndex();
+        _setPos: function(t5) {
+            this._icon && Z(this._icon, t5), this._shadow && Z(this._shadow, t5), this._zIndex = t5.y + this.options.zIndexOffset, this._resetZIndex();
         },
-        _updateZIndex: function(t3) {
-            this._icon && (this._icon.style.zIndex = this._zIndex + t3);
+        _updateZIndex: function(t5) {
+            this._icon && (this._icon.style.zIndex = this._zIndex + t5);
         },
-        _animateZoom: function(t3) {
-            var i4 = this._map._latLngToNewLayerPoint(this._latlng, t3.zoom, t3.center).round();
-            this._setPos(i4);
+        _animateZoom: function(t5) {
+            t5 = this._map._latLngToNewLayerPoint(this._latlng, t5.zoom, t5.center).round();
+            this._setPos(t5);
         },
         _initInteraction: function() {
-            var t3;
-            this.options.interactive && (ci(this._icon, "leaflet-interactive"), this.addInteractiveTarget(this._icon), Ee && (t3 = this.options.draggable, this.dragging && (t3 = this.dragging.enabled(), this.dragging.disable()), this.dragging = new Ee(this), t3 && this.dragging.enable()));
+            var t5;
+            this.options.interactive && (M(this._icon, "leaflet-interactive"), this.addInteractiveTarget(this._icon), pi && (t5 = this.options.draggable, this.dragging && (t5 = this.dragging.enabled(), this.dragging.disable()), this.dragging = new pi(this), t5 && this.dragging.enable()));
         },
-        setOpacity: function(t3) {
-            return this.options.opacity = t3, this._map && this._updateOpacity(), this;
+        setOpacity: function(t5) {
+            return this.options.opacity = t5, this._map && this._updateOpacity(), this;
         },
         _updateOpacity: function() {
-            var t3 = this.options.opacity;
-            this._icon && mi(this._icon, t3), this._shadow && mi(this._shadow, t3);
+            var t5 = this.options.opacity;
+            this._icon && C(this._icon, t5), this._shadow && C(this._shadow, t5);
         },
         _bringToFront: function() {
             this._updateZIndex(this.options.riseOffset);
         },
         _resetZIndex: function() {
             this._updateZIndex(0);
+        },
+        _panOnFocus: function() {
+            var t5, e7, i9 = this._map;
+            i9 && (t5 = (e7 = this.options.icon.options).iconSize ? m(e7.iconSize) : m(0, 0), e7 = e7.iconAnchor ? m(e7.iconAnchor) : m(0, 0), i9.panInside(this._latlng, {
+                paddingTopLeft: e7,
+                paddingBottomRight: t5.subtract(e7)
+            }));
         },
         _getPopupAnchor: function() {
             return this.options.icon.options.popupAnchor;
@@ -3174,7 +3273,7 @@ function fitBoundsPadding(e) {
             return this.options.icon.options.tooltipAnchor;
         }
     });
-    var Be = Me.extend({
+    var fi = o6.extend({
         options: {
             stroke: !0,
             color: "#3388ff",
@@ -3191,8 +3290,8 @@ function fitBoundsPadding(e) {
             interactive: !0,
             bubblingMouseEvents: !0
         },
-        beforeAdd: function(t3) {
-            this._renderer = t3.getRenderer(this);
+        beforeAdd: function(t5) {
+            this._renderer = t5.getRenderer(this);
         },
         onAdd: function() {
             this._renderer._initPath(this), this._reset(), this._renderer._addPath(this);
@@ -3203,8 +3302,8 @@ function fitBoundsPadding(e) {
         redraw: function() {
             return this._map && this._renderer._updatePath(this), this;
         },
-        setStyle: function(t3) {
-            return c(this, t3), this._renderer && (this._renderer._updateStyle(this), this.options.stroke && t3 && Object.prototype.hasOwnProperty.call(t3, "weight") && this._updateBounds()), this;
+        setStyle: function(t5) {
+            return c(this, t5), this._renderer && (this._renderer._updateStyle(this), this.options.stroke && t5 && Object.prototype.hasOwnProperty.call(t5, "weight") && this._updateBounds()), this;
         },
         bringToFront: function() {
             return this._renderer && this._renderer._bringToFront(this), this;
@@ -3219,45 +3318,45 @@ function fitBoundsPadding(e) {
             this._project(), this._update();
         },
         _clickTolerance: function() {
-            return (this.options.stroke ? this.options.weight / 2 : 0) + this._renderer.options.tolerance;
+            return (this.options.stroke ? this.options.weight / 2 : 0) + (this._renderer.options.tolerance || 0);
         }
-    }), Ae = Be.extend({
+    }), gi = fi.extend({
         options: {
             fill: !0,
             radius: 10
         },
-        initialize: function(t3, i4) {
-            c(this, i4), this._latlng = j(t3), this._radius = this.options.radius;
+        initialize: function(t5, e7) {
+            c(this, e7), this._latlng = w(t5), this._radius = this.options.radius;
         },
-        setLatLng: function(t3) {
-            var i4 = this._latlng;
-            return this._latlng = j(t3), this.redraw(), this.fire("move", {
-                oldLatLng: i4,
+        setLatLng: function(t5) {
+            var e7 = this._latlng;
+            return this._latlng = w(t5), this.redraw(), this.fire("move", {
+                oldLatLng: e7,
                 latlng: this._latlng
             });
         },
         getLatLng: function() {
             return this._latlng;
         },
-        setRadius: function(t3) {
-            return this.options.radius = this._radius = t3, this.redraw();
+        setRadius: function(t5) {
+            return this.options.radius = this._radius = t5, this.redraw();
         },
         getRadius: function() {
             return this._radius;
         },
-        setStyle: function(t3) {
-            var i4 = t3 && t3.radius || this._radius;
-            return Be.prototype.setStyle.call(this, t3), this.setRadius(i4), this;
+        setStyle: function(t5) {
+            var e7 = t5 && t5.radius || this._radius;
+            return fi.prototype.setStyle.call(this, t5), this.setRadius(e7), this;
         },
         _project: function() {
             this._point = this._map.latLngToLayerPoint(this._latlng), this._updateBounds();
         },
         _updateBounds: function() {
-            var t3 = this._radius, i4 = this._radiusY || t3, e4 = this._clickTolerance(), n3 = [
-                t3 + e4,
-                i4 + e4
+            var t5 = this._radius, e7 = this._radiusY || t5, i9 = this._clickTolerance(), t5 = [
+                t5 + i9,
+                e7 + i9
             ];
-            this._pxBounds = new I(this._point.subtract(n3), this._point.add(n3));
+            this._pxBounds = new f(this._point.subtract(t5), this._point.add(t5));
         },
         _update: function() {
             this._map && this._updatePath();
@@ -3268,127 +3367,120 @@ function fitBoundsPadding(e) {
         _empty: function() {
             return this._radius && !this._renderer._bounds.intersects(this._pxBounds);
         },
-        _containsPoint: function(t3) {
-            return t3.distanceTo(this._point) <= this._radius + this._clickTolerance();
+        _containsPoint: function(t5) {
+            return t5.distanceTo(this._point) <= this._radius + this._clickTolerance();
         }
     });
-    var Ie = Ae.extend({
-        initialize: function(t3, i4, e4) {
-            if ("number" == typeof i4 && (i4 = h({
-            }, e4, {
-                radius: i4
-            })), c(this, i4), this._latlng = j(t3), isNaN(this.options.radius)) throw new Error("Circle radius cannot be NaN");
+    var vi = gi.extend({
+        initialize: function(t5, e7, i9) {
+            if (c(this, e7 = "number" == typeof e7 ? l({
+            }, i9, {
+                radius: e7
+            }) : e7), this._latlng = w(t5), isNaN(this.options.radius)) throw new Error("Circle radius cannot be NaN");
             this._mRadius = this.options.radius;
         },
-        setRadius: function(t3) {
-            return this._mRadius = t3, this.redraw();
+        setRadius: function(t5) {
+            return this._mRadius = t5, this.redraw();
         },
         getRadius: function() {
             return this._mRadius;
         },
         getBounds: function() {
-            var t3 = [
+            var t5 = [
                 this._radius,
                 this._radiusY || this._radius
             ];
-            return new R(this._map.layerPointToLatLng(this._point.subtract(t3)), this._map.layerPointToLatLng(this._point.add(t3)));
+            return new s(this._map.layerPointToLatLng(this._point.subtract(t5)), this._map.layerPointToLatLng(this._point.add(t5)));
         },
-        setStyle: Be.prototype.setStyle,
+        setStyle: fi.prototype.setStyle,
         _project: function() {
-            var t3, i4, e4, n3, o4, s4, r5, a4, h1 = this._latlng.lng, u1 = this._latlng.lat, l1 = this._map, c1 = l1.options.crs;
-            c1.distance === F.distance ? (t3 = Math.PI / 180, i4 = this._mRadius / F.R / t3, e4 = l1.project([
-                u1 + i4,
-                h1
-            ]), n3 = l1.project([
-                u1 - i4,
-                h1
-            ]), o4 = e4.add(n3).divideBy(2), s4 = l1.unproject(o4).lat, r5 = Math.acos((Math.cos(i4 * t3) - Math.sin(u1 * t3) * Math.sin(s4 * t3)) / (Math.cos(u1 * t3) * Math.cos(s4 * t3))) / t3, !isNaN(r5) && 0 !== r5 || (r5 = i4 / Math.cos(Math.PI / 180 * u1)), this._point = o4.subtract(l1.getPixelOrigin()), this._radius = isNaN(r5) ? 0 : o4.x - l1.project([
-                s4,
-                h1 - r5
-            ]).x, this._radiusY = o4.y - e4.y) : (a4 = c1.unproject(c1.project(this._latlng).subtract([
+            var t5, e7, i9, n9, o7, s6 = this._latlng.lng, r7 = this._latlng.lat, a4 = this._map, h3 = a4.options.crs;
+            h3.distance === st.distance ? (n9 = Math.PI / 180, o7 = this._mRadius / st.R / n9, t5 = a4.project([
+                r7 + o7,
+                s6
+            ]), e7 = a4.project([
+                r7 - o7,
+                s6
+            ]), e7 = t5.add(e7).divideBy(2), i9 = a4.unproject(e7).lat, n9 = Math.acos((Math.cos(o7 * n9) - Math.sin(r7 * n9) * Math.sin(i9 * n9)) / (Math.cos(r7 * n9) * Math.cos(i9 * n9))) / n9, !isNaN(n9) && 0 !== n9 || (n9 = o7 / Math.cos(Math.PI / 180 * r7)), this._point = e7.subtract(a4.getPixelOrigin()), this._radius = isNaN(n9) ? 0 : e7.x - a4.project([
+                i9,
+                s6 - n9
+            ]).x, this._radiusY = e7.y - t5.y) : (o7 = h3.unproject(h3.project(this._latlng).subtract([
                 this._mRadius,
                 0
-            ])), this._point = l1.latLngToLayerPoint(this._latlng), this._radius = this._point.x - l1.latLngToLayerPoint(a4).x), this._updateBounds();
+            ])), this._point = a4.latLngToLayerPoint(this._latlng), this._radius = this._point.x - a4.latLngToLayerPoint(o7).x), this._updateBounds();
         }
     });
-    var Oe = Be.extend({
+    var yi = fi.extend({
         options: {
             smoothFactor: 1,
             noClip: !1
         },
-        initialize: function(t3, i4) {
-            c(this, i4), this._setLatLngs(t3);
+        initialize: function(t5, e7) {
+            c(this, e7), this._setLatLngs(t5);
         },
         getLatLngs: function() {
             return this._latlngs;
         },
-        setLatLngs: function(t3) {
-            return this._setLatLngs(t3), this.redraw();
+        setLatLngs: function(t5) {
+            return this._setLatLngs(t5), this.redraw();
         },
         isEmpty: function() {
             return !this._latlngs.length;
         },
-        closestLayerPoint: function(t3) {
-            for(var i4, e4, n3 = 1 / 0, o4 = null, s4 = de, r5 = 0, a4 = this._parts.length; r5 < a4; r5++)for(var h1 = this._parts[r5], u1 = 1, l1 = h1.length; u1 < l1; u1++){
-                var c1 = s4(t3, i4 = h1[u1 - 1], e4 = h1[u1], !0);
-                c1 < n3 && (n3 = c1, o4 = s4(t3, i4, e4));
+        closestLayerPoint: function(t5) {
+            for(var e7 = 1 / 0, i9 = null, n9 = ri, o7 = 0, s6 = this._parts.length; o7 < s6; o7++)for(var r7 = this._parts[o7], a4 = 1, h3 = r7.length; a4 < h3; a4++){
+                var l1, u1, c1 = n9(t5, l1 = r7[a4 - 1], u1 = r7[a4], !0);
+                c1 < e7 && (e7 = c1, i9 = n9(t5, l1, u1));
             }
-            return o4 && (o4.distance = Math.sqrt(n3)), o4;
+            return i9 && (i9.distance = Math.sqrt(e7)), i9;
         },
         getCenter: function() {
-            if (!this._map) throw new Error("Must add layer to map before using getCenter()");
-            var t3, i4, e4, n3, o4, s4, r5, a4 = this._rings[0], h1 = a4.length;
-            if (!h1) return null;
-            for(i4 = t3 = 0; t3 < h1 - 1; t3++)i4 += a4[t3].distanceTo(a4[t3 + 1]) / 2;
-            if (0 === i4) return this._map.layerPointToLatLng(a4[0]);
-            for(n3 = t3 = 0; t3 < h1 - 1; t3++)if (o4 = a4[t3], s4 = a4[t3 + 1], i4 < (n3 += e4 = o4.distanceTo(s4))) return r5 = (n3 - i4) / e4, this._map.layerPointToLatLng([
-                s4.x - r5 * (s4.x - o4.x),
-                s4.y - r5 * (s4.y - o4.y)
-            ]);
+            if (this._map) return hi(this._defaultShape(), this._map.options.crs);
+            throw new Error("Must add layer to map before using getCenter()");
         },
         getBounds: function() {
             return this._bounds;
         },
-        addLatLng: function(t3, i4) {
-            return i4 = i4 || this._defaultShape(), t3 = j(t3), i4.push(t3), this._bounds.extend(t3), this.redraw();
+        addLatLng: function(t5, e7) {
+            return e7 = e7 || this._defaultShape(), t5 = w(t5), e7.push(t5), this._bounds.extend(t5), this.redraw();
         },
-        _setLatLngs: function(t3) {
-            this._bounds = new R, this._latlngs = this._convertLatLngs(t3);
+        _setLatLngs: function(t5) {
+            this._bounds = new s, this._latlngs = this._convertLatLngs(t5);
         },
         _defaultShape: function() {
-            return pe(this._latlngs) ? this._latlngs : this._latlngs[0];
+            return I(this._latlngs) ? this._latlngs : this._latlngs[0];
         },
-        _convertLatLngs: function(t3) {
-            for(var i4 = [], e4 = pe(t3), n3 = 0, o4 = t3.length; n3 < o4; n3++)e4 ? (i4[n3] = j(t3[n3]), this._bounds.extend(i4[n3])) : i4[n3] = this._convertLatLngs(t3[n3]);
-            return i4;
+        _convertLatLngs: function(t5) {
+            for(var e7 = [], i9 = I(t5), n9 = 0, o7 = t5.length; n9 < o7; n9++)i9 ? (e7[n9] = w(t5[n9]), this._bounds.extend(e7[n9])) : e7[n9] = this._convertLatLngs(t5[n9]);
+            return e7;
         },
         _project: function() {
-            var t3 = new I;
-            this._rings = [], this._projectLatlngs(this._latlngs, this._rings, t3), this._bounds.isValid() && t3.isValid() && (this._rawPxBounds = t3, this._updateBounds());
+            var t5 = new f;
+            this._rings = [], this._projectLatlngs(this._latlngs, this._rings, t5), this._bounds.isValid() && t5.isValid() && (this._rawPxBounds = t5, this._updateBounds());
         },
         _updateBounds: function() {
-            var t3 = this._clickTolerance(), i4 = new k(t3, t3);
-            this._pxBounds = new I([
-                this._rawPxBounds.min.subtract(i4),
-                this._rawPxBounds.max.add(i4)
-            ]);
+            var t5 = this._clickTolerance(), t5 = new p(t5, t5);
+            this._rawPxBounds && (this._pxBounds = new f([
+                this._rawPxBounds.min.subtract(t5),
+                this._rawPxBounds.max.add(t5)
+            ]));
         },
-        _projectLatlngs: function(t3, i4, e4) {
-            var n3, o4, s4 = t3[0] instanceof D, r5 = t3.length;
-            if (s4) {
-                for(o4 = [], n3 = 0; n3 < r5; n3++)o4[n3] = this._map.latLngToLayerPoint(t3[n3]), e4.extend(o4[n3]);
-                i4.push(o4);
-            } else for(n3 = 0; n3 < r5; n3++)this._projectLatlngs(t3[n3], i4, e4);
+        _projectLatlngs: function(t5, e7, i9) {
+            var n9, o7, s6 = t5[0] instanceof v, r7 = t5.length;
+            if (s6) {
+                for(o7 = [], n9 = 0; n9 < r7; n9++)o7[n9] = this._map.latLngToLayerPoint(t5[n9]), i9.extend(o7[n9]);
+                e7.push(o7);
+            } else for(n9 = 0; n9 < r7; n9++)this._projectLatlngs(t5[n9], e7, i9);
         },
         _clipPoints: function() {
-            var t3 = this._renderer._bounds;
-            if (this._parts = [], this._pxBounds && this._pxBounds.intersects(t3)) {
+            var t5 = this._renderer._bounds;
+            if (this._parts = [], this._pxBounds && this._pxBounds.intersects(t5)) {
                 if (this.options.noClip) this._parts = this._rings;
-                else for(var i4, e4, n3, o4, s4 = this._parts, r5 = 0, a4 = 0, h1 = this._rings.length; r5 < h1; r5++)for(i4 = 0, e4 = (o4 = this._rings[r5]).length; i4 < e4 - 1; i4++)(n3 = le(o4[i4], o4[i4 + 1], t3, i4, !0)) && (s4[a4] = s4[a4] || [], s4[a4].push(n3[0]), n3[1] === o4[i4 + 1] && i4 !== e4 - 2 || (s4[a4].push(n3[1]), a4++));
+                else for(var e7, i9, n9, o7, s6 = this._parts, r7 = 0, a4 = 0, h3 = this._rings.length; r7 < h3; r7++)for(e7 = 0, i9 = (o7 = this._rings[r7]).length; e7 < i9 - 1; e7++)(n9 = ni(o7[e7], o7[e7 + 1], t5, e7, !0)) && (s6[a4] = s6[a4] || [], s6[a4].push(n9[0]), n9[1] === o7[e7 + 1] && e7 !== i9 - 2 || (s6[a4].push(n9[1]), a4++));
             }
         },
         _simplifyPoints: function() {
-            for(var t3 = this._parts, i5 = this.options.smoothFactor, e5 = 0, n5 = t3.length; e5 < n5; e5++)t3[e5] = he(t3[e5], i5);
+            for(var t5 = this._parts, e8 = this.options.smoothFactor, i10 = 0, n10 = t5.length; i10 < n10; i10++)t5[i10] = ei(t5[i10], e8);
         },
         _update: function() {
             this._map && (this._clipPoints(), this._simplifyPoints(), this._updatePath());
@@ -3396,15 +3488,14 @@ function fitBoundsPadding(e) {
         _updatePath: function() {
             this._renderer._updatePoly(this);
         },
-        _containsPoint: function(t3, i5) {
-            var e5, n5, o5, s5, r6, a5, h2 = this._clickTolerance();
-            if (!this._pxBounds || !this._pxBounds.contains(t3)) return !1;
-            for(e5 = 0, s5 = this._parts.length; e5 < s5; e5++)for(n5 = 0, o5 = (r6 = (a5 = this._parts[e5]).length) - 1; n5 < r6; o5 = n5++)if ((i5 || 0 !== n5) && ue(t3, a5[o5], a5[n5]) <= h2) return !0;
+        _containsPoint: function(t5, e8) {
+            var i10, n10, o8, s7, r8, a5, h4 = this._clickTolerance();
+            if (this._pxBounds && this._pxBounds.contains(t5)) for(i10 = 0, s7 = this._parts.length; i10 < s7; i10++)for(n10 = 0, o8 = (r8 = (a5 = this._parts[i10]).length) - 1; n10 < r8; o8 = n10++)if ((e8 || 0 !== n10) && ii(t5, a5[o8], a5[n10]) <= h4) return !0;
             return !1;
         }
     });
-    Oe._flat = me;
-    var Re = Oe.extend({
+    yi._flat = ai;
+    var xi = yi.extend({
         options: {
             fill: !0
         },
@@ -3412,196 +3503,191 @@ function fitBoundsPadding(e) {
             return !this._latlngs.length || !this._latlngs[0].length;
         },
         getCenter: function() {
-            if (!this._map) throw new Error("Must add layer to map before using getCenter()");
-            var t3, i5, e5, n5, o5, s5, r6, a5, h2, u1 = this._rings[0], l1 = u1.length;
-            if (!l1) return null;
-            for(t3 = s5 = r6 = a5 = 0, i5 = l1 - 1; t3 < l1; i5 = t3++)e5 = u1[t3], n5 = u1[i5], o5 = e5.y * n5.x - n5.y * e5.x, r6 += (e5.x + n5.x) * o5, a5 += (e5.y + n5.y) * o5, s5 += 3 * o5;
-            return h2 = 0 === s5 ? u1[0] : [
-                r6 / s5,
-                a5 / s5
-            ], this._map.layerPointToLatLng(h2);
+            if (this._map) return $e(this._defaultShape(), this._map.options.crs);
+            throw new Error("Must add layer to map before using getCenter()");
         },
-        _convertLatLngs: function(t3) {
-            var i5 = Oe.prototype._convertLatLngs.call(this, t3), e5 = i5.length;
-            return 2 <= e5 && i5[0] instanceof D && i5[0].equals(i5[e5 - 1]) && i5.pop(), i5;
+        _convertLatLngs: function(t5) {
+            var t5 = yi.prototype._convertLatLngs.call(this, t5), e8 = t5.length;
+            return 2 <= e8 && t5[0] instanceof v && t5[0].equals(t5[e8 - 1]) && t5.pop(), t5;
         },
-        _setLatLngs: function(t3) {
-            Oe.prototype._setLatLngs.call(this, t3), pe(this._latlngs) && (this._latlngs = [
+        _setLatLngs: function(t5) {
+            yi.prototype._setLatLngs.call(this, t5), I(this._latlngs) && (this._latlngs = [
                 this._latlngs
             ]);
         },
         _defaultShape: function() {
-            return pe(this._latlngs[0]) ? this._latlngs[0] : this._latlngs[0][0];
+            return (I(this._latlngs[0]) ? this._latlngs : this._latlngs[0])[0];
         },
         _clipPoints: function() {
-            var t3 = this._renderer._bounds, i5 = this.options.weight, e5 = new k(i5, i5), t3 = new I(t3.min.subtract(e5), t3.max.add(e5));
-            if (this._parts = [], this._pxBounds && this._pxBounds.intersects(t3)) {
+            var t5 = this._renderer._bounds, e8 = this.options.weight, e8 = new p(e8, e8), t5 = new f(t5.min.subtract(e8), t5.max.add(e8));
+            if (this._parts = [], this._pxBounds && this._pxBounds.intersects(t5)) {
                 if (this.options.noClip) this._parts = this._rings;
-                else for(var n5, o5 = 0, s5 = this._rings.length; o5 < s5; o5++)(n5 = ge(this._rings[o5], t3, !0)).length && this._parts.push(n5);
+                else for(var i10, n10 = 0, o8 = this._rings.length; n10 < o8; n10++)(i10 = Je(this._rings[n10], t5, !0)).length && this._parts.push(i10);
             }
         },
         _updatePath: function() {
             this._renderer._updatePoly(this, !0);
         },
-        _containsPoint: function(t3) {
-            var i5, e5, n6, o6, s6, r6, a5, h2, u1 = !1;
-            if (!this._pxBounds || !this._pxBounds.contains(t3)) return !1;
-            for(o6 = 0, a5 = this._parts.length; o6 < a5; o6++)for(s6 = 0, r6 = (h2 = (i5 = this._parts[o6]).length) - 1; s6 < h2; r6 = s6++)e5 = i5[s6], n6 = i5[r6], e5.y > t3.y != n6.y > t3.y && t3.x < (n6.x - e5.x) * (t3.y - e5.y) / (n6.y - e5.y) + e5.x && (u1 = !u1);
-            return u1 || Oe.prototype._containsPoint.call(this, t3, !0);
+        _containsPoint: function(t5) {
+            var e8, i11, n11, o9, s7, r8, a5, h4, l2 = !1;
+            if (!this._pxBounds || !this._pxBounds.contains(t5)) return !1;
+            for(o9 = 0, a5 = this._parts.length; o9 < a5; o9++)for(s7 = 0, r8 = (h4 = (e8 = this._parts[o9]).length) - 1; s7 < h4; r8 = s7++)i11 = e8[s7], n11 = e8[r8], i11.y > t5.y != n11.y > t5.y && t5.x < (n11.x - i11.x) * (t5.y - i11.y) / (n11.y - i11.y) + i11.x && (l2 = !l2);
+            return l2 || yi.prototype._containsPoint.call(this, t5, !0);
         }
     });
-    var Ne = Ce.extend({
-        initialize: function(t3, i5) {
-            c(this, i5), this._layers = {
-            }, t3 && this.addData(t3);
+    var wi = ci.extend({
+        initialize: function(t5, e8) {
+            c(this, e8), this._layers = {
+            }, t5 && this.addData(t5);
         },
-        addData: function(t3) {
-            var i5, e5, n6, o6 = g(t3) ? t3 : t3.features;
-            if (o6) {
-                for(i5 = 0, e5 = o6.length; i5 < e5; i5++)((n6 = o6[i5]).geometries || n6.geometry || n6.features || n6.coordinates) && this.addData(n6);
+        addData: function(t5) {
+            var e8, i11, n11, o9 = d(t5) ? t5 : t5.features;
+            if (o9) {
+                for(e8 = 0, i11 = o9.length; e8 < i11; e8++)((n11 = o9[e8]).geometries || n11.geometry || n11.features || n11.coordinates) && this.addData(n11);
                 return this;
             }
-            var s6 = this.options;
-            if (s6.filter && !s6.filter(t3)) return this;
-            var r6 = De(t3, s6);
-            return r6 ? (r6.feature = qe(t3), r6.defaultOptions = r6.options, this.resetStyle(r6), s6.onEachFeature && s6.onEachFeature(t3, r6), this.addLayer(r6)) : this;
+            var s7, r8 = this.options;
+            return (!r8.filter || r8.filter(t5)) && (s7 = bi(t5, r8)) ? (s7.feature = Zi(t5), s7.defaultOptions = s7.options, this.resetStyle(s7), r8.onEachFeature && r8.onEachFeature(t5, s7), this.addLayer(s7)) : this;
         },
-        resetStyle: function(t3) {
-            return (void 0) === t3 ? this.eachLayer(this.resetStyle, this) : (t3.options = h({
-            }, t3.defaultOptions), this._setLayerStyle(t3, this.options.style), this);
+        resetStyle: function(t5) {
+            return (void 0) === t5 ? this.eachLayer(this.resetStyle, this) : (t5.options = l({
+            }, t5.defaultOptions), this._setLayerStyle(t5, this.options.style), this);
         },
-        setStyle: function(i5) {
-            return this.eachLayer(function(t3) {
-                this._setLayerStyle(t3, i5);
+        setStyle: function(e8) {
+            return this.eachLayer(function(t5) {
+                this._setLayerStyle(t5, e8);
             }, this);
         },
-        _setLayerStyle: function(t3, i5) {
-            t3.setStyle && ("function" == typeof i5 && (i5 = i5(t3.feature)), t3.setStyle(i5));
+        _setLayerStyle: function(t5, e8) {
+            t5.setStyle && ("function" == typeof e8 && (e8 = e8(t5.feature)), t5.setStyle(e8));
         }
     });
-    function De(t3, i5) {
-        var e5, n6, o6, s6, r6 = "Feature" === t3.type ? t3.geometry : t3, a5 = r6 ? r6.coordinates : null, h2 = [], u1 = i5 && i5.pointToLayer, l1 = i5 && i5.coordsToLatLng || We;
-        if (!a5 && !r6) return null;
-        switch(r6.type){
+    function bi(t5, e8) {
+        var i11, n11, o9, s7, r8 = "Feature" === t5.type ? t5.geometry : t5, a5 = r8 ? r8.coordinates : null, h4 = [], l2 = e8 && e8.pointToLayer, u2 = e8 && e8.coordsToLatLng || Li;
+        if (!a5 && !r8) return null;
+        switch(r8.type){
             case "Point":
-                return je(u1, t3, e5 = l1(a5), i5);
+                return Pi(l2, t5, i11 = u2(a5), e8);
             case "MultiPoint":
-                for(o6 = 0, s6 = a5.length; o6 < s6; o6++)e5 = l1(a5[o6]), h2.push(je(u1, t3, e5, i5));
-                return new Ce(h2);
+                for(o9 = 0, s7 = a5.length; o9 < s7; o9++)i11 = u2(a5[o9]), h4.push(Pi(l2, t5, i11, e8));
+                return new ci(h4);
             case "LineString":
             case "MultiLineString":
-                return n6 = He(a5, "LineString" === r6.type ? 0 : 1, l1), new Oe(n6, i5);
+                return n11 = Ti(a5, "LineString" === r8.type ? 0 : 1, u2), new yi(n11, e8);
             case "Polygon":
             case "MultiPolygon":
-                return n6 = He(a5, "Polygon" === r6.type ? 1 : 2, l1), new Re(n6, i5);
+                return n11 = Ti(a5, "Polygon" === r8.type ? 1 : 2, u2), new xi(n11, e8);
             case "GeometryCollection":
-                for(o6 = 0, s6 = r6.geometries.length; o6 < s6; o6++){
-                    var c2 = De({
-                        geometry: r6.geometries[o6],
+                for(o9 = 0, s7 = r8.geometries.length; o9 < s7; o9++){
+                    var c2 = bi({
+                        geometry: r8.geometries[o9],
                         type: "Feature",
-                        properties: t3.properties
-                    }, i5);
-                    c2 && h2.push(c2);
+                        properties: t5.properties
+                    }, e8);
+                    c2 && h4.push(c2);
                 }
-                return new Ce(h2);
+                return new ci(h4);
+            case "FeatureCollection":
+                for(o9 = 0, s7 = r8.features.length; o9 < s7; o9++){
+                    var d1 = bi(r8.features[o9], e8);
+                    d1 && h4.push(d1);
+                }
+                return new ci(h4);
             default:
                 throw new Error("Invalid GeoJSON object.");
         }
     }
-    function je(t3, i5, e5, n6) {
-        return t3 ? t3(i5, e5) : new ke(e5, n6 && n6.markersInheritOptions && n6);
+    function Pi(t5, e8, i11, n11) {
+        return t5 ? t5(e8, i11) : new mi(i11, n11 && n11.markersInheritOptions && n11);
     }
-    function We(t3) {
-        return new D(t3[1], t3[0], t3[2]);
+    function Li(t5) {
+        return new v(t5[1], t5[0], t5[2]);
     }
-    function He(t3, i5, e5) {
-        for(var n6, o6 = [], s6 = 0, r6 = t3.length; s6 < r6; s6++)n6 = i5 ? He(t3[s6], i5 - 1, e5) : (e5 || We)(t3[s6]), o6.push(n6);
-        return o6;
+    function Ti(t5, e8, i11) {
+        for(var n11, o9 = [], s7 = 0, r8 = t5.length; s7 < r8; s7++)n11 = e8 ? Ti(t5[s7], e8 - 1, i11) : (i11 || Li)(t5[s7]), o9.push(n11);
+        return o9;
     }
-    function Fe(t3, i5) {
-        return i5 = "number" == typeof i5 ? i5 : 6, (void 0) !== t3.alt ? [
-            r3(t3.lng, i5),
-            r3(t3.lat, i5),
-            r3(t3.alt, i5)
+    function Mi(t5, e8) {
+        return (void 0) !== (t5 = w(t5)).alt ? [
+            i12(t5.lng, e8),
+            i12(t5.lat, e8),
+            i12(t5.alt, e8)
         ] : [
-            r3(t3.lng, i5),
-            r3(t3.lat, i5)
+            i12(t5.lng, e8),
+            i12(t5.lat, e8)
         ];
     }
-    function Ue(t3, i5, e5, n6) {
-        for(var o6 = [], s6 = 0, r6 = t3.length; s6 < r6; s6++)o6.push(i5 ? Ue(t3[s6], i5 - 1, e5, n6) : Fe(t3[s6], n6));
-        return !i5 && e5 && o6.push(o6[0]), o6;
+    function zi(t5, e8, i11, n11) {
+        for(var o9 = [], s7 = 0, r8 = t5.length; s7 < r8; s7++)o9.push(e8 ? zi(t5[s7], I(t5[s7]) ? 0 : e8 - 1, i11, n11) : Mi(t5[s7], n11));
+        return !e8 && i11 && 0 < o9.length && o9.push(o9[0].slice()), o9;
     }
-    function Ve(t3, i5) {
-        return t3.feature ? h({
-        }, t3.feature, {
-            geometry: i5
-        }) : qe(i5);
+    function Ci(t5, e8) {
+        return t5.feature ? l({
+        }, t5.feature, {
+            geometry: e8
+        }) : Zi(e8);
     }
-    function qe(t3) {
-        return "Feature" === t3.type || "FeatureCollection" === t3.type ? t3 : {
+    function Zi(t5) {
+        return "Feature" === t5.type || "FeatureCollection" === t5.type ? t5 : {
             type: "Feature",
             properties: {
             },
-            geometry: t3
+            geometry: t5
         };
     }
-    var Ge = {
-        toGeoJSON: function(t3) {
-            return Ve(this, {
+    Tt = {
+        toGeoJSON: function(t5) {
+            return Ci(this, {
                 type: "Point",
-                coordinates: Fe(this.getLatLng(), t3)
+                coordinates: Mi(this.getLatLng(), t5)
             });
         }
     };
-    function Ke(t3, i5) {
-        return new Ne(t3, i5);
+    function Si(t5, e8) {
+        return new wi(t5, e8);
     }
-    ke.include(Ge), Ie.include(Ge), Ae.include(Ge), Oe.include({
-        toGeoJSON: function(t3) {
-            var i5 = !pe(this._latlngs);
-            return Ve(this, {
-                type: (i5 ? "Multi" : "") + "LineString",
-                coordinates: Ue(this._latlngs, i5 ? 1 : 0, !1, t3)
+    mi.include(Tt), vi.include(Tt), gi.include(Tt), yi.include({
+        toGeoJSON: function(t5) {
+            var e8 = !I(this._latlngs);
+            return Ci(this, {
+                type: (e8 ? "Multi" : "") + "LineString",
+                coordinates: zi(this._latlngs, e8 ? 1 : 0, !1, t5)
             });
         }
-    }), Re.include({
-        toGeoJSON: function(t3) {
-            var i5 = !pe(this._latlngs), e5 = i5 && !pe(this._latlngs[0]), n6 = Ue(this._latlngs, e5 ? 2 : i5 ? 1 : 0, !0, t3);
-            return i5 || (n6 = [
-                n6
-            ]), Ve(this, {
-                type: (e5 ? "Multi" : "") + "Polygon",
-                coordinates: n6
+    }), xi.include({
+        toGeoJSON: function(t5) {
+            var e8 = !I(this._latlngs), i11 = e8 && !I(this._latlngs[0]), t5 = zi(this._latlngs, i11 ? 2 : e8 ? 1 : 0, !0, t5);
+            return Ci(this, {
+                type: (i11 ? "Multi" : "") + "Polygon",
+                coordinates: t5 = e8 ? t5 : [
+                    t5
+                ]
             });
         }
-    }), ze.include({
-        toMultiPoint: function(i5) {
-            var e5 = [];
-            return this.eachLayer(function(t3) {
-                e5.push(t3.toGeoJSON(i5).geometry.coordinates);
-            }), Ve(this, {
+    }), ui.include({
+        toMultiPoint: function(e8) {
+            var i11 = [];
+            return this.eachLayer(function(t5) {
+                i11.push(t5.toGeoJSON(e8).geometry.coordinates);
+            }), Ci(this, {
                 type: "MultiPoint",
-                coordinates: e5
+                coordinates: i11
             });
         },
-        toGeoJSON: function(n6) {
-            var t3 = this.feature && this.feature.geometry && this.feature.geometry.type;
-            if ("MultiPoint" === t3) return this.toMultiPoint(n6);
-            var o6 = "GeometryCollection" === t3, s6 = [];
-            return this.eachLayer(function(t4) {
-                var i5, e5;
-                t4.toGeoJSON && (i5 = t4.toGeoJSON(n6), o6 ? s6.push(i5.geometry) : "FeatureCollection" === (e5 = qe(i5)).type ? s6.push.apply(s6, e5.features) : s6.push(e5));
-            }), o6 ? Ve(this, {
-                geometries: s6,
+        toGeoJSON: function(e8) {
+            var i11, n11, t5 = this.feature && this.feature.geometry && this.feature.geometry.type;
+            return "MultiPoint" === t5 ? this.toMultiPoint(e8) : (i11 = "GeometryCollection" === t5, n11 = [], this.eachLayer(function(t6) {
+                t6.toGeoJSON && (t6 = t6.toGeoJSON(e8), i11 ? n11.push(t6.geometry) : "FeatureCollection" === (t6 = Zi(t6)).type ? n11.push.apply(n11, t6.features) : n11.push(t6));
+            }), i11 ? Ci(this, {
+                geometries: n11,
                 type: "GeometryCollection"
             }) : {
                 type: "FeatureCollection",
-                features: s6
-            };
+                features: n11
+            });
         }
     });
-    var Ye = Ke, Xe = Me.extend({
+    var Mt = Si, Ei = o6.extend({
         options: {
             opacity: 1,
             alt: "",
@@ -3611,42 +3697,42 @@ function fitBoundsPadding(e) {
             zIndex: 1,
             className: ""
         },
-        initialize: function(t3, i5, e5) {
-            this._url = t3, this._bounds = N(i5), c(this, e5);
+        initialize: function(t5, e8, i11) {
+            this._url = t5, this._bounds = g(e8), c(this, i11);
         },
         onAdd: function() {
-            this._image || (this._initImage(), this.options.opacity < 1 && this._updateOpacity()), this.options.interactive && (ci(this._image, "leaflet-interactive"), this.addInteractiveTarget(this._image)), this.getPane().appendChild(this._image), this._reset();
+            this._image || (this._initImage(), this.options.opacity < 1 && this._updateOpacity()), this.options.interactive && (M(this._image, "leaflet-interactive"), this.addInteractiveTarget(this._image)), this.getPane().appendChild(this._image), this._reset();
         },
         onRemove: function() {
-            ri(this._image), this.options.interactive && this.removeInteractiveTarget(this._image);
+            T(this._image), this.options.interactive && this.removeInteractiveTarget(this._image);
         },
-        setOpacity: function(t3) {
-            return this.options.opacity = t3, this._image && this._updateOpacity(), this;
+        setOpacity: function(t5) {
+            return this.options.opacity = t5, this._image && this._updateOpacity(), this;
         },
-        setStyle: function(t3) {
-            return t3.opacity && this.setOpacity(t3.opacity), this;
+        setStyle: function(t5) {
+            return t5.opacity && this.setOpacity(t5.opacity), this;
         },
         bringToFront: function() {
-            return this._map && hi(this._image), this;
+            return this._map && fe(this._image), this;
         },
         bringToBack: function() {
-            return this._map && ui(this._image), this;
+            return this._map && ge(this._image), this;
         },
-        setUrl: function(t3) {
-            return this._url = t3, this._image && (this._image.src = t3), this;
+        setUrl: function(t5) {
+            return this._url = t5, this._image && (this._image.src = t5), this;
         },
-        setBounds: function(t3) {
-            return this._bounds = N(t3), this._map && this._reset(), this;
+        setBounds: function(t5) {
+            return this._bounds = g(t5), this._map && this._reset(), this;
         },
         getEvents: function() {
-            var t3 = {
+            var t5 = {
                 zoom: this._reset,
                 viewreset: this._reset
             };
-            return this._zoomAnimated && (t3.zoomanim = this._animateZoom), t3;
+            return this._zoomAnimated && (t5.zoomanim = this._animateZoom), t5;
         },
-        setZIndex: function(t3) {
-            return this.options.zIndex = t3, this._updateZIndex(), this;
+        setZIndex: function(t5) {
+            return this.options.zIndex = t5, this._updateZIndex(), this;
         },
         getBounds: function() {
             return this._bounds;
@@ -3655,88 +3741,103 @@ function fitBoundsPadding(e) {
             return this._image;
         },
         _initImage: function() {
-            var t3 = "IMG" === this._url.tagName, i5 = this._image = t3 ? this._url : si("img");
-            ci(i5, "leaflet-image-layer"), this._zoomAnimated && ci(i5, "leaflet-zoom-animated"), this.options.className && ci(i5, this.options.className), i5.onselectstart = a, i5.onmousemove = a, i5.onload = p(this.fire, this, "load"), i5.onerror = p(this._overlayOnError, this, "error"), !this.options.crossOrigin && "" !== this.options.crossOrigin || (i5.crossOrigin = !0 === this.options.crossOrigin ? "" : this.options.crossOrigin), this.options.zIndex && this._updateZIndex(), t3 ? this._url = i5.src : (i5.src = this._url, i5.alt = this.options.alt);
+            var t5 = "IMG" === this._url.tagName, e8 = this._image = t5 ? this._url : P("img");
+            M(e8, "leaflet-image-layer"), this._zoomAnimated && M(e8, "leaflet-zoom-animated"), this.options.className && M(e8, this.options.className), e8.onselectstart = u, e8.onmousemove = u, e8.onload = a2(this.fire, this, "load"), e8.onerror = a2(this._overlayOnError, this, "error"), !this.options.crossOrigin && "" !== this.options.crossOrigin || (e8.crossOrigin = !0 === this.options.crossOrigin ? "" : this.options.crossOrigin), this.options.zIndex && this._updateZIndex(), t5 ? this._url = e8.src : (e8.src = this._url, e8.alt = this.options.alt);
         },
-        _animateZoom: function(t3) {
-            var i5 = this._map.getZoomScale(t3.zoom), e5 = this._map._latLngBoundsToNewLayerBounds(this._bounds, t3.zoom, t3.center).min;
-            gi(this._image, e5, i5);
+        _animateZoom: function(t5) {
+            var e8 = this._map.getZoomScale(t5.zoom), t5 = this._map._latLngBoundsToNewLayerBounds(this._bounds, t5.zoom, t5.center).min;
+            be(this._image, t5, e8);
         },
         _reset: function() {
-            var t3 = this._image, i5 = new I(this._map.latLngToLayerPoint(this._bounds.getNorthWest()), this._map.latLngToLayerPoint(this._bounds.getSouthEast())), e5 = i5.getSize();
-            vi(t3, i5.min), t3.style.width = e5.x + "px", t3.style.height = e5.y + "px";
+            var t5 = this._image, e8 = new f(this._map.latLngToLayerPoint(this._bounds.getNorthWest()), this._map.latLngToLayerPoint(this._bounds.getSouthEast())), i11 = e8.getSize();
+            Z(t5, e8.min), t5.style.width = i11.x + "px", t5.style.height = i11.y + "px";
         },
         _updateOpacity: function() {
-            mi(this._image, this.options.opacity);
+            C(this._image, this.options.opacity);
         },
         _updateZIndex: function() {
             this._image && (void 0) !== this.options.zIndex && null !== this.options.zIndex && (this._image.style.zIndex = this.options.zIndex);
         },
         _overlayOnError: function() {
             this.fire("error");
-            var t3 = this.options.errorOverlayUrl;
-            t3 && this._url !== t3 && (this._url = t3, this._image.src = t3);
+            var t5 = this.options.errorOverlayUrl;
+            t5 && this._url !== t5 && (this._url = t5, this._image.src = t5);
+        },
+        getCenter: function() {
+            return this._bounds.getCenter();
         }
-    }), Je = Xe.extend({
+    }), ki = Ei.extend({
         options: {
             autoplay: !0,
             loop: !0,
             keepAspectRatio: !0,
-            muted: !1
+            muted: !1,
+            playsInline: !0
         },
         _initImage: function() {
-            var t3 = "VIDEO" === this._url.tagName, i5 = this._image = t3 ? this._url : si("video");
-            if (ci(i5, "leaflet-image-layer"), this._zoomAnimated && ci(i5, "leaflet-zoom-animated"), this.options.className && ci(i5, this.options.className), i5.onselectstart = a, i5.onmousemove = a, i5.onloadeddata = p(this.fire, this, "load"), t3) {
-                for(var e5 = i5.getElementsByTagName("source"), n6 = [], o6 = 0; o6 < e5.length; o6++)n6.push(e5[o6].src);
-                this._url = 0 < e5.length ? n6 : [
-                    i5.src
+            var t5 = "VIDEO" === this._url.tagName, e8 = this._image = t5 ? this._url : P("video");
+            if (M(e8, "leaflet-image-layer"), this._zoomAnimated && M(e8, "leaflet-zoom-animated"), this.options.className && M(e8, this.options.className), e8.onselectstart = u, e8.onmousemove = u, e8.onloadeddata = a2(this.fire, this, "load"), t5) {
+                for(var i11 = e8.getElementsByTagName("source"), n11 = [], o9 = 0; o9 < i11.length; o9++)n11.push(i11[o9].src);
+                this._url = 0 < i11.length ? n11 : [
+                    e8.src
                 ];
             } else {
-                g(this._url) || (this._url = [
+                d(this._url) || (this._url = [
                     this._url
-                ]), !this.options.keepAspectRatio && Object.prototype.hasOwnProperty.call(i5.style, "objectFit") && (i5.style.objectFit = "fill"), i5.autoplay = !!this.options.autoplay, i5.loop = !!this.options.loop, i5.muted = !!this.options.muted;
-                for(var s6 = 0; s6 < this._url.length; s6++){
-                    var r6 = si("source");
-                    r6.src = this._url[s6], i5.appendChild(r6);
+                ]), !this.options.keepAspectRatio && Object.prototype.hasOwnProperty.call(e8.style, "objectFit") && (e8.style.objectFit = "fill"), e8.autoplay = !!this.options.autoplay, e8.loop = !!this.options.loop, e8.muted = !!this.options.muted, e8.playsInline = !!this.options.playsInline;
+                for(var s7 = 0; s7 < this._url.length; s7++){
+                    var r8 = P("source");
+                    r8.src = this._url[s7], e8.appendChild(r8);
                 }
             }
         }
     });
-    var $e = Xe.extend({
+    var Oi = Ei.extend({
         _initImage: function() {
-            var t3 = this._image = this._url;
-            ci(t3, "leaflet-image-layer"), this._zoomAnimated && ci(t3, "leaflet-zoom-animated"), this.options.className && ci(t3, this.options.className), t3.onselectstart = a, t3.onmousemove = a;
+            var t5 = this._image = this._url;
+            M(t5, "leaflet-image-layer"), this._zoomAnimated && M(t5, "leaflet-zoom-animated"), this.options.className && M(t5, this.options.className), t5.onselectstart = u, t5.onmousemove = u;
         }
     });
-    var Qe = Me.extend({
+    var Ai = o6.extend({
         options: {
+            interactive: !1,
             offset: [
                 0,
-                7
+                0
             ],
             className: "",
-            pane: "popupPane"
+            pane: void 0,
+            content: ""
         },
-        initialize: function(t3, i5) {
-            c(this, t3), this._source = i5;
+        initialize: function(t5, e8) {
+            t5 && (t5 instanceof v || d(t5)) ? (this._latlng = w(t5), c(this, e8)) : (c(this, t5), this._source = e8), this.options.content && (this._content = this.options.content);
         },
-        onAdd: function(t3) {
-            this._zoomAnimated = t3._zoomAnimated, this._container || this._initLayout(), t3._fadeAnimated && mi(this._container, 0), clearTimeout(this._removeTimeout), this.getPane().appendChild(this._container), this.update(), t3._fadeAnimated && mi(this._container, 1), this.bringToFront();
+        openOn: function(t5) {
+            return (t5 = arguments.length ? t5 : this._source._map).hasLayer(this) || t5.addLayer(this), this;
         },
-        onRemove: function(t3) {
-            t3._fadeAnimated ? (mi(this._container, 0), this._removeTimeout = setTimeout(p(ri, void 0, this._container), 200)) : ri(this._container);
+        close: function() {
+            return this._map && this._map.removeLayer(this), this;
+        },
+        toggle: function(t5) {
+            return this._map ? this.close() : (arguments.length ? this._source = t5 : t5 = this._source, this._prepareOpen(), this.openOn(t5._map)), this;
+        },
+        onAdd: function(t5) {
+            this._zoomAnimated = t5._zoomAnimated, this._container || this._initLayout(), t5._fadeAnimated && C(this._container, 0), clearTimeout(this._removeTimeout), this.getPane().appendChild(this._container), this.update(), t5._fadeAnimated && C(this._container, 1), this.bringToFront(), this.options.interactive && (M(this._container, "leaflet-interactive"), this.addInteractiveTarget(this._container));
+        },
+        onRemove: function(t5) {
+            t5._fadeAnimated ? (C(this._container, 0), this._removeTimeout = setTimeout(a2(T, void 0, this._container), 200)) : T(this._container), this.options.interactive && (z(this._container, "leaflet-interactive"), this.removeInteractiveTarget(this._container));
         },
         getLatLng: function() {
             return this._latlng;
         },
-        setLatLng: function(t3) {
-            return this._latlng = j(t3), this._map && (this._updatePosition(), this._adjustPan()), this;
+        setLatLng: function(t5) {
+            return this._latlng = w(t5), this._map && (this._updatePosition(), this._adjustPan()), this;
         },
         getContent: function() {
             return this._content;
         },
-        setContent: function(t3) {
-            return this._content = t3, this.update(), this;
+        setContent: function(t5) {
+            return this._content = t5, this.update(), this;
         },
         getElement: function() {
             return this._container;
@@ -3745,49 +3846,56 @@ function fitBoundsPadding(e) {
             this._map && (this._container.style.visibility = "hidden", this._updateContent(), this._updateLayout(), this._updatePosition(), this._container.style.visibility = "", this._adjustPan());
         },
         getEvents: function() {
-            var t3 = {
+            var t5 = {
                 zoom: this._updatePosition,
                 viewreset: this._updatePosition
             };
-            return this._zoomAnimated && (t3.zoomanim = this._animateZoom), t3;
+            return this._zoomAnimated && (t5.zoomanim = this._animateZoom), t5;
         },
         isOpen: function() {
             return !!this._map && this._map.hasLayer(this);
         },
         bringToFront: function() {
-            return this._map && hi(this._container), this;
+            return this._map && fe(this._container), this;
         },
         bringToBack: function() {
-            return this._map && ui(this._container), this;
+            return this._map && ge(this._container), this;
         },
-        _prepareOpen: function(t3, i5, e6) {
-            if (i5 instanceof Me || (e6 = i5, i5 = t3), i5 instanceof Ce) for(var n7 in t3._layers){
-                i5 = t3._layers[n7];
-                break;
+        _prepareOpen: function(t5) {
+            if (!(i13 = this._source)._map) return !1;
+            if (i13 instanceof ci) {
+                var e8, i13 = null, n12 = this._source._layers;
+                for(e8 in n12)if (n12[e8]._map) {
+                    i13 = n12[e8];
+                    break;
+                }
+                if (!i13) return !1;
+                this._source = i13;
             }
-            if (!e6) {
-                if (i5.getCenter) e6 = i5.getCenter();
+            if (!t5) {
+                if (i13.getCenter) t5 = i13.getCenter();
+                else if (i13.getLatLng) t5 = i13.getLatLng();
                 else {
-                    if (!i5.getLatLng) throw new Error("Unable to get source layer LatLng.");
-                    e6 = i5.getLatLng();
+                    if (!i13.getBounds) throw new Error("Unable to get source layer LatLng.");
+                    t5 = i13.getBounds().getCenter();
                 }
             }
-            return this._source = i5, this.update(), e6;
+            return this.setLatLng(t5), this._map && this.update(), !0;
         },
         _updateContent: function() {
             if (this._content) {
-                var t3 = this._contentNode, i5 = "function" == typeof this._content ? this._content(this._source || this) : this._content;
-                if ("string" == typeof i5) t3.innerHTML = i5;
+                var t5 = this._contentNode, e9 = "function" == typeof this._content ? this._content(this._source || this) : this._content;
+                if ("string" == typeof e9) t5.innerHTML = e9;
                 else {
-                    for(; t3.hasChildNodes();)t3.removeChild(t3.firstChild);
-                    t3.appendChild(i5);
+                    for(; t5.hasChildNodes();)t5.removeChild(t5.firstChild);
+                    t5.appendChild(e9);
                 }
                 this.fire("contentupdate");
             }
         },
         _updatePosition: function() {
-            var t4, i6, e6, n7, o7;
-            this._map && (t4 = this._map.latLngToLayerPoint(this._latlng), i6 = A(this.options.offset), e6 = this._getAnchor(), this._zoomAnimated ? vi(this._container, t4.add(e6)) : i6 = i6.add(t4).add(e6), n7 = this._containerBottom = -i6.y, o7 = this._containerLeft = -Math.round(this._containerWidth / 2) + i6.x, this._container.style.bottom = n7 + "px", this._container.style.left = o7 + "px");
+            var t6, e10, i14;
+            this._map && (e10 = this._map.latLngToLayerPoint(this._latlng), t6 = m(this.options.offset), i14 = this._getAnchor(), this._zoomAnimated ? Z(this._container, e10.add(i14)) : t6 = t6.add(e10).add(i14), e10 = this._containerBottom = -t6.y, i14 = this._containerLeft = -Math.round(this._containerWidth / 2) + t6.x, this._container.style.bottom = e10 + "px", this._container.style.left = i14 + "px");
         },
         _getAnchor: function() {
             return [
@@ -3795,8 +3903,23 @@ function fitBoundsPadding(e) {
                 0
             ];
         }
-    }), tn = Qe.extend({
+    }), Bi = (A.include({
+        _initOverlay: function(t6, e10, i14, n13) {
+            var o10 = e10;
+            return o10 instanceof t6 || (o10 = new t6(n13).setContent(e10)), i14 && o10.setLatLng(i14), o10;
+        }
+    }), o6.include({
+        _initOverlay: function(t6, e10, i14, n13) {
+            var o10 = i14;
+            return o10 instanceof t6 ? (c(o10, n13), o10._source = this) : (o10 = e10 && !n13 ? e10 : new t6(n13, this)).setContent(i14), o10;
+        }
+    }), Ai.extend({
         options: {
+            pane: "popupPane",
+            offset: [
+                0,
+                7
+            ],
             maxWidth: 300,
             minWidth: 50,
             maxHeight: null,
@@ -3813,75 +3936,66 @@ function fitBoundsPadding(e) {
             closeOnEscapeKey: !0,
             className: ""
         },
-        openOn: function(t4) {
-            return t4.openPopup(this), this;
+        openOn: function(t6) {
+            return !(t6 = arguments.length ? t6 : this._source._map).hasLayer(this) && t6._popup && t6._popup.options.autoClose && t6.removeLayer(t6._popup), t6._popup = this, Ai.prototype.openOn.call(this, t6);
         },
-        onAdd: function(t4) {
-            Qe.prototype.onAdd.call(this, t4), t4.fire("popupopen", {
+        onAdd: function(t6) {
+            Ai.prototype.onAdd.call(this, t6), t6.fire("popupopen", {
                 popup: this
             }), this._source && (this._source.fire("popupopen", {
                 popup: this
-            }, !0), this._source instanceof Be || this._source.on("preclick", Ai));
+            }, !0), this._source instanceof fi || this._source.on("preclick", Ae));
         },
-        onRemove: function(t4) {
-            Qe.prototype.onRemove.call(this, t4), t4.fire("popupclose", {
+        onRemove: function(t6) {
+            Ai.prototype.onRemove.call(this, t6), t6.fire("popupclose", {
                 popup: this
             }), this._source && (this._source.fire("popupclose", {
                 popup: this
-            }, !0), this._source instanceof Be || this._source.off("preclick", Ai));
+            }, !0), this._source instanceof fi || this._source.off("preclick", Ae));
         },
         getEvents: function() {
-            var t4 = Qe.prototype.getEvents.call(this);
-            return ((void 0) !== this.options.closeOnClick ? this.options.closeOnClick : this._map.options.closePopupOnClick) && (t4.preclick = this._close), this.options.keepInView && (t4.moveend = this._adjustPan), t4;
-        },
-        _close: function() {
-            this._map && this._map.closePopup(this);
+            var t6 = Ai.prototype.getEvents.call(this);
+            return ((void 0) !== this.options.closeOnClick ? this.options.closeOnClick : this._map.options.closePopupOnClick) && (t6.preclick = this.close), this.options.keepInView && (t6.moveend = this._adjustPan), t6;
         },
         _initLayout: function() {
-            var t4, i6 = "leaflet-popup", e6 = this._container = si("div", i6 + " " + (this.options.className || "") + " leaflet-zoom-animated"), n7 = this._wrapper = si("div", i6 + "-content-wrapper", e6);
-            this._contentNode = si("div", i6 + "-content", n7), Oi(e6), Ii(this._contentNode), zi(e6, "contextmenu", Ai), this._tipContainer = si("div", i6 + "-tip-container", e6), this._tip = si("div", i6 + "-tip", this._tipContainer), this.options.closeButton && ((t4 = this._closeButton = si("a", i6 + "-close-button", e6)).href = "#close", t4.innerHTML = "&#215;", zi(t4, "click", this._onCloseButtonClick, this));
+            var t6 = "leaflet-popup", e10 = this._container = P("div", t6 + " " + (this.options.className || "") + " leaflet-zoom-animated"), i14 = this._wrapper = P("div", t6 + "-content-wrapper", e10);
+            this._contentNode = P("div", t6 + "-content", i14), Ie(e10), Be(this._contentNode), S(e10, "contextmenu", Ae), this._tipContainer = P("div", t6 + "-tip-container", e10), this._tip = P("div", t6 + "-tip", this._tipContainer), this.options.closeButton && ((i14 = this._closeButton = P("a", t6 + "-close-button", e10)).setAttribute("role", "button"), i14.setAttribute("aria-label", "Close popup"), i14.href = "#close", i14.innerHTML = '<span aria-hidden="true">&#215;</span>', S(i14, "click", function(t7) {
+                O(t7), this.close();
+            }, this));
         },
         _updateLayout: function() {
-            var t4 = this._contentNode, i6 = t4.style;
-            i6.width = "", i6.whiteSpace = "nowrap";
-            var e6 = t4.offsetWidth, e6 = Math.min(e6, this.options.maxWidth);
-            e6 = Math.max(e6, this.options.minWidth), i6.width = e6 + 1 + "px", i6.whiteSpace = "", i6.height = "";
-            var n7 = t4.offsetHeight, o7 = this.options.maxHeight, s7 = "leaflet-popup-scrolled";
-            o7 && o7 < n7 ? (i6.height = o7 + "px", ci(t4, s7)) : _i(t4, s7), this._containerWidth = this._container.offsetWidth;
+            var t6 = this._contentNode, e10 = t6.style, i14 = (e10.width = "", e10.whiteSpace = "nowrap", t6.offsetWidth), i14 = Math.min(i14, this.options.maxWidth), i14 = (i14 = Math.max(i14, this.options.minWidth), e10.width = i14 + 1 + "px", e10.whiteSpace = "", e10.height = "", t6.offsetHeight), n13 = this.options.maxHeight, o10 = "leaflet-popup-scrolled";
+            (n13 && n13 < i14 ? (e10.height = n13 + "px", M) : z)(t6, o10), this._containerWidth = this._container.offsetWidth;
         },
-        _animateZoom: function(t4) {
-            var i6 = this._map._latLngToNewLayerPoint(this._latlng, t4.zoom, t4.center), e6 = this._getAnchor();
-            vi(this._container, i6.add(e6));
+        _animateZoom: function(t6) {
+            var t6 = this._map._latLngToNewLayerPoint(this._latlng, t6.zoom, t6.center), e10 = this._getAnchor();
+            Z(this._container, t6.add(e10));
         },
         _adjustPan: function() {
-            var t4, i6, e6, n7, o7, s7, r7, a5, h2, u1, l1, c3;
-            this.options.autoPan && (this._map._panAnim && this._map._panAnim.stop(), t4 = this._map, i6 = parseInt(oi(this._container, "marginBottom"), 10) || 0, e6 = this._container.offsetHeight + i6, n7 = this._containerWidth, (o7 = new k(this._containerLeft, -e6 - this._containerBottom))._add(yi(this._container)), s7 = t4.layerPointToContainerPoint(o7), r7 = A(this.options.autoPanPadding), a5 = A(this.options.autoPanPaddingTopLeft || r7), h2 = A(this.options.autoPanPaddingBottomRight || r7), u1 = t4.getSize(), c3 = l1 = 0, s7.x + n7 + h2.x > u1.x && (l1 = s7.x + n7 - u1.x + h2.x), s7.x - l1 - a5.x < 0 && (l1 = s7.x - a5.x), s7.y + e6 + h2.y > u1.y && (c3 = s7.y + e6 - u1.y + h2.y), s7.y - c3 - a5.y < 0 && (c3 = s7.y - a5.y), (l1 || c3) && t4.fire("autopanstart").panBy([
-                l1,
-                c3
-            ]));
-        },
-        _onCloseButtonClick: function(t4) {
-            this._close(), Ni(t4);
+            var t6, e10, i14, n13, o10, s8, r9, a5;
+            this.options.autoPan && (this._map._panAnim && this._map._panAnim.stop(), this._autopanning ? this._autopanning = !1 : (t6 = this._map, e10 = parseInt(pe(this._container, "marginBottom"), 10) || 0, e10 = this._container.offsetHeight + e10, a5 = this._containerWidth, (i14 = new p(this._containerLeft, -e10 - this._containerBottom))._add(Pe(this._container)), i14 = t6.layerPointToContainerPoint(i14), o10 = m(this.options.autoPanPadding), n13 = m(this.options.autoPanPaddingTopLeft || o10), o10 = m(this.options.autoPanPaddingBottomRight || o10), s8 = t6.getSize(), r9 = 0, i14.x + a5 + o10.x > s8.x && (r9 = i14.x + a5 - s8.x + o10.x), i14.x - r9 - n13.x < (a5 = 0) && (r9 = i14.x - n13.x), i14.y + e10 + o10.y > s8.y && (a5 = i14.y + e10 - s8.y + o10.y), i14.y - a5 - n13.y < 0 && (a5 = i14.y - n13.y), (r9 || a5) && (this.options.keepInView && (this._autopanning = !0), t6.fire("autopanstart").panBy([
+                r9,
+                a5
+            ]))));
         },
         _getAnchor: function() {
-            return A(this._source && this._source._getPopupAnchor ? this._source._getPopupAnchor() : [
+            return m(this._source && this._source._getPopupAnchor ? this._source._getPopupAnchor() : [
                 0,
                 0
             ]);
         }
-    });
-    Ki.mergeOptions({
+    })), Ii = (A.mergeOptions({
         closePopupOnClick: !0
-    }), Ki.include({
-        openPopup: function(t4, i6, e6) {
-            return t4 instanceof tn || (t4 = new tn(e6).setContent(t4)), i6 && t4.setLatLng(i6), this.hasLayer(t4) ? this : (this._popup && this._popup.options.autoClose && this.closePopup(), this._popup = t4, this.addLayer(t4));
+    }), A.include({
+        openPopup: function(t6, e10, i14) {
+            return this._initOverlay(Bi, t6, e10, i14).openOn(this), this;
         },
-        closePopup: function(t4) {
-            return t4 && t4 !== this._popup || (t4 = this._popup, this._popup = null), t4 && this.removeLayer(t4), this;
+        closePopup: function(t6) {
+            return (t6 = arguments.length ? t6 : this._popup) && t6.close(), this;
         }
-    }), Me.include({
-        bindPopup: function(t4, i6) {
-            return t4 instanceof tn ? (c(t4, i6), (this._popup = t4)._source = this) : (this._popup && !i6 || (this._popup = new tn(i6, this)), this._popup.setContent(t4)), this._popupHandlersAdded || (this.on({
+    }), o6.include({
+        bindPopup: function(t6, e10) {
+            return this._popup = this._initOverlay(Bi, this._popup, t6, e10), this._popupHandlersAdded || (this.on({
                 click: this._openPopup,
                 keypress: this._onKeyPress,
                 remove: this.closePopup,
@@ -3896,36 +4010,35 @@ function fitBoundsPadding(e) {
                 move: this._movePopup
             }), this._popupHandlersAdded = !1, this._popup = null), this;
         },
-        openPopup: function(t4, i6) {
-            return this._popup && this._map && (i6 = this._popup._prepareOpen(this, t4, i6), this._map.openPopup(this._popup, i6)), this;
+        openPopup: function(t6) {
+            return this._popup && (this instanceof ci || (this._popup._source = this), this._popup._prepareOpen(t6 || this._latlng) && this._popup.openOn(this._map)), this;
         },
         closePopup: function() {
-            return this._popup && this._popup._close(), this;
+            return this._popup && this._popup.close(), this;
         },
-        togglePopup: function(t4) {
-            return this._popup && (this._popup._map ? this.closePopup() : this.openPopup(t4)), this;
+        togglePopup: function() {
+            return this._popup && this._popup.toggle(this), this;
         },
         isPopupOpen: function() {
             return !!this._popup && this._popup.isOpen();
         },
-        setPopupContent: function(t4) {
-            return this._popup && this._popup.setContent(t4), this;
+        setPopupContent: function(t6) {
+            return this._popup && this._popup.setContent(t6), this;
         },
         getPopup: function() {
             return this._popup;
         },
-        _openPopup: function(t4) {
-            var i6 = t4.layer || t4.target;
-            this._popup && this._map && (Ni(t4), i6 instanceof Be ? this.openPopup(t4.layer || t4.target, t4.latlng) : this._map.hasLayer(this._popup) && this._popup._source === i6 ? this.closePopup() : this.openPopup(i6, t4.latlng));
+        _openPopup: function(t6) {
+            var e10;
+            this._popup && this._map && (Re(t6), e10 = t6.layer || t6.target, this._popup._source !== e10 || e10 instanceof fi ? (this._popup._source = e10, this.openPopup(t6.latlng)) : this._map.hasLayer(this._popup) ? this.closePopup() : this.openPopup(t6.latlng));
         },
-        _movePopup: function(t4) {
-            this._popup.setLatLng(t4.latlng);
+        _movePopup: function(t6) {
+            this._popup.setLatLng(t6.latlng);
         },
-        _onKeyPress: function(t4) {
-            13 === t4.originalEvent.keyCode && this._openPopup(t4);
+        _onKeyPress: function(t6) {
+            13 === t6.originalEvent.keyCode && this._openPopup(t6);
         }
-    });
-    var en = Qe.extend({
+    }), Ai.extend({
         options: {
             pane: "tooltipPane",
             offset: [
@@ -3935,109 +4048,118 @@ function fitBoundsPadding(e) {
             direction: "auto",
             permanent: !1,
             sticky: !1,
-            interactive: !1,
             opacity: 0.9
         },
-        onAdd: function(t4) {
-            Qe.prototype.onAdd.call(this, t4), this.setOpacity(this.options.opacity), t4.fire("tooltipopen", {
+        onAdd: function(t6) {
+            Ai.prototype.onAdd.call(this, t6), this.setOpacity(this.options.opacity), t6.fire("tooltipopen", {
                 tooltip: this
-            }), this._source && this._source.fire("tooltipopen", {
+            }), this._source && (this.addEventParent(this._source), this._source.fire("tooltipopen", {
                 tooltip: this
-            }, !0);
+            }, !0));
         },
-        onRemove: function(t4) {
-            Qe.prototype.onRemove.call(this, t4), t4.fire("tooltipclose", {
+        onRemove: function(t6) {
+            Ai.prototype.onRemove.call(this, t6), t6.fire("tooltipclose", {
                 tooltip: this
-            }), this._source && this._source.fire("tooltipclose", {
+            }), this._source && (this.removeEventParent(this._source), this._source.fire("tooltipclose", {
                 tooltip: this
-            }, !0);
+            }, !0));
         },
         getEvents: function() {
-            var t4 = Qe.prototype.getEvents.call(this);
-            return bt && !this.options.permanent && (t4.preclick = this._close), t4;
-        },
-        _close: function() {
-            this._map && this._map.closeTooltip(this);
+            var t6 = Ai.prototype.getEvents.call(this);
+            return this.options.permanent || (t6.preclick = this.close), t6;
         },
         _initLayout: function() {
-            var t4 = "leaflet-tooltip " + (this.options.className || "") + " leaflet-zoom-" + (this._zoomAnimated ? "animated" : "hide");
-            this._contentNode = this._container = si("div", t4);
+            var t6 = "leaflet-tooltip " + (this.options.className || "") + " leaflet-zoom-" + (this._zoomAnimated ? "animated" : "hide");
+            this._contentNode = this._container = P("div", t6), this._container.setAttribute("role", "tooltip"), this._container.setAttribute("id", "leaflet-tooltip-" + h(this));
         },
         _updateLayout: function() {
         },
         _adjustPan: function() {
         },
-        _setPosition: function(t4) {
-            var i6, e6 = this._map, n7 = this._container, o7 = e6.latLngToContainerPoint(e6.getCenter()), s7 = e6.layerPointToContainerPoint(t4), r7 = this.options.direction, a5 = n7.offsetWidth, h2 = n7.offsetHeight, u1 = A(this.options.offset), l1 = this._getAnchor(), c3 = "top" === r7 ? (i6 = a5 / 2, h2) : "bottom" === r7 ? (i6 = a5 / 2, 0) : (i6 = "center" === r7 ? a5 / 2 : "right" === r7 ? 0 : "left" === r7 ? a5 : s7.x < o7.x ? (r7 = "right", 0) : (r7 = "left", a5 + 2 * (u1.x + l1.x)), h2 / 2);
-            t4 = t4.subtract(A(i6, c3, !0)).add(u1).add(l1), _i(n7, "leaflet-tooltip-right"), _i(n7, "leaflet-tooltip-left"), _i(n7, "leaflet-tooltip-top"), _i(n7, "leaflet-tooltip-bottom"), ci(n7, "leaflet-tooltip-" + r7), vi(n7, t4);
+        _setPosition: function(t6) {
+            var e10, i14 = this._map, n13 = this._container, o10 = i14.latLngToContainerPoint(i14.getCenter()), i14 = i14.layerPointToContainerPoint(t6), s8 = this.options.direction, r9 = n13.offsetWidth, a5 = n13.offsetHeight, h4 = m(this.options.offset), l2 = this._getAnchor(), i14 = "top" === s8 ? (e10 = r9 / 2, a5) : "bottom" === s8 ? (e10 = r9 / 2, 0) : (e10 = "center" === s8 ? r9 / 2 : "right" === s8 ? 0 : "left" === s8 ? r9 : i14.x < o10.x ? (s8 = "right", 0) : (s8 = "left", r9 + 2 * (h4.x + l2.x)), a5 / 2);
+            t6 = t6.subtract(m(e10, i14, !0)).add(h4).add(l2), z(n13, "leaflet-tooltip-right"), z(n13, "leaflet-tooltip-left"), z(n13, "leaflet-tooltip-top"), z(n13, "leaflet-tooltip-bottom"), M(n13, "leaflet-tooltip-" + s8), Z(n13, t6);
         },
         _updatePosition: function() {
-            var t4 = this._map.latLngToLayerPoint(this._latlng);
-            this._setPosition(t4);
+            var t6 = this._map.latLngToLayerPoint(this._latlng);
+            this._setPosition(t6);
         },
-        setOpacity: function(t4) {
-            this.options.opacity = t4, this._container && mi(this._container, t4);
+        setOpacity: function(t6) {
+            this.options.opacity = t6, this._container && C(this._container, t6);
         },
-        _animateZoom: function(t4) {
-            var i6 = this._map._latLngToNewLayerPoint(this._latlng, t4.zoom, t4.center);
-            this._setPosition(i6);
+        _animateZoom: function(t6) {
+            t6 = this._map._latLngToNewLayerPoint(this._latlng, t6.zoom, t6.center);
+            this._setPosition(t6);
         },
         _getAnchor: function() {
-            return A(this._source && this._source._getTooltipAnchor && !this.options.sticky ? this._source._getTooltipAnchor() : [
+            return m(this._source && this._source._getTooltipAnchor && !this.options.sticky ? this._source._getTooltipAnchor() : [
                 0,
                 0
             ]);
         }
-    });
-    Ki.include({
-        openTooltip: function(t4, i6, e6) {
-            return t4 instanceof en || (t4 = new en(e6).setContent(t4)), i6 && t4.setLatLng(i6), this.hasLayer(t4) ? this : this.addLayer(t4);
+    })), Ri = (A.include({
+        openTooltip: function(t6, e10, i14) {
+            return this._initOverlay(Ii, t6, e10, i14).openOn(this), this;
         },
-        closeTooltip: function(t4) {
-            return t4 && this.removeLayer(t4), this;
+        closeTooltip: function(t6) {
+            return t6.close(), this;
         }
-    }), Me.include({
-        bindTooltip: function(t4, i6) {
-            return t4 instanceof en ? (c(t4, i6), (this._tooltip = t4)._source = this) : (this._tooltip && !i6 || (this._tooltip = new en(i6, this)), this._tooltip.setContent(t4)), this._initTooltipInteractions(), this._tooltip.options.permanent && this._map && this._map.hasLayer(this) && this.openTooltip(), this;
+    }), o6.include({
+        bindTooltip: function(t6, e10) {
+            return this._tooltip && this.isTooltipOpen() && this.unbindTooltip(), this._tooltip = this._initOverlay(Ii, this._tooltip, t6, e10), this._initTooltipInteractions(), this._tooltip.options.permanent && this._map && this._map.hasLayer(this) && this.openTooltip(), this;
         },
         unbindTooltip: function() {
             return this._tooltip && (this._initTooltipInteractions(!0), this.closeTooltip(), this._tooltip = null), this;
         },
-        _initTooltipInteractions: function(t4) {
-            var i6, e6;
-            !t4 && this._tooltipHandlersAdded || (i6 = t4 ? "off" : "on", e6 = {
+        _initTooltipInteractions: function(t6) {
+            var e10, i14;
+            !t6 && this._tooltipHandlersAdded || (e10 = t6 ? "off" : "on", i14 = {
                 remove: this.closeTooltip,
                 move: this._moveTooltip
-            }, this._tooltip.options.permanent ? e6.add = this._openTooltip : (e6.mouseover = this._openTooltip, e6.mouseout = this.closeTooltip, this._tooltip.options.sticky && (e6.mousemove = this._moveTooltip), bt && (e6.click = this._openTooltip)), this[i6](e6), this._tooltipHandlersAdded = !t4);
+            }, this._tooltip.options.permanent ? i14.add = this._openTooltip : (i14.mouseover = this._openTooltip, i14.mouseout = this.closeTooltip, i14.click = this._openTooltip, this._map ? this._addFocusListeners() : i14.add = this._addFocusListeners), this._tooltip.options.sticky && (i14.mousemove = this._moveTooltip), this[e10](i14), this._tooltipHandlersAdded = !t6);
         },
-        openTooltip: function(t4, i6) {
-            return this._tooltip && this._map && (i6 = this._tooltip._prepareOpen(this, t4, i6), this._map.openTooltip(this._tooltip, i6), this._tooltip.options.interactive && this._tooltip._container && (ci(this._tooltip._container, "leaflet-clickable"), this.addInteractiveTarget(this._tooltip._container))), this;
+        openTooltip: function(t6) {
+            return this._tooltip && (this instanceof ci || (this._tooltip._source = this), this._tooltip._prepareOpen(t6) && (this._tooltip.openOn(this._map), this.getElement ? this._setAriaDescribedByOnLayer(this) : this.eachLayer && this.eachLayer(this._setAriaDescribedByOnLayer, this))), this;
         },
         closeTooltip: function() {
-            return this._tooltip && (this._tooltip._close(), this._tooltip.options.interactive && this._tooltip._container && (_i(this._tooltip._container, "leaflet-clickable"), this.removeInteractiveTarget(this._tooltip._container))), this;
+            if (this._tooltip) return this._tooltip.close();
         },
-        toggleTooltip: function(t4) {
-            return this._tooltip && (this._tooltip._map ? this.closeTooltip() : this.openTooltip(t4)), this;
+        toggleTooltip: function() {
+            return this._tooltip && this._tooltip.toggle(this), this;
         },
         isTooltipOpen: function() {
             return this._tooltip.isOpen();
         },
-        setTooltipContent: function(t4) {
-            return this._tooltip && this._tooltip.setContent(t4), this;
+        setTooltipContent: function(t6) {
+            return this._tooltip && this._tooltip.setContent(t6), this;
         },
         getTooltip: function() {
             return this._tooltip;
         },
-        _openTooltip: function(t4) {
-            var i6 = t4.layer || t4.target;
-            this._tooltip && this._map && this.openTooltip(i6, this._tooltip.options.sticky ? t4.latlng : void 0);
+        _addFocusListeners: function() {
+            this.getElement ? this._addFocusListenersOnLayer(this) : this.eachLayer && this.eachLayer(this._addFocusListenersOnLayer, this);
         },
-        _moveTooltip: function(t4) {
-            var i6, e6, n7 = t4.latlng;
-            this._tooltip.options.sticky && t4.originalEvent && (i6 = this._map.mouseEventToContainerPoint(t4.originalEvent), e6 = this._map.containerPointToLayerPoint(i6), n7 = this._map.layerPointToLatLng(e6)), this._tooltip.setLatLng(n7);
+        _addFocusListenersOnLayer: function(t6) {
+            var e10 = "function" == typeof t6.getElement && t6.getElement();
+            e10 && (S(e10, "focus", function() {
+                this._tooltip._source = t6, this.openTooltip();
+            }, this), S(e10, "blur", this.closeTooltip, this));
+        },
+        _setAriaDescribedByOnLayer: function(t6) {
+            t6 = "function" == typeof t6.getElement && t6.getElement();
+            t6 && t6.setAttribute("aria-describedby", this._tooltip._container.id);
+        },
+        _openTooltip: function(t6) {
+            var e10;
+            this._tooltip && this._map && (this._map.dragging && this._map.dragging.moving() && !this._openOnceFlag ? (this._openOnceFlag = !0, (e10 = this)._map.once("moveend", function() {
+                e10._openOnceFlag = !1, e10._openTooltip(t6);
+            })) : (this._tooltip._source = t6.layer || t6.target, this.openTooltip(this._tooltip.options.sticky ? t6.latlng : void 0)));
+        },
+        _moveTooltip: function(t6) {
+            var e10 = t6.latlng;
+            this._tooltip.options.sticky && t6.originalEvent && (t6 = this._map.mouseEventToContainerPoint(t6.originalEvent), t6 = this._map.containerPointToLayerPoint(t6), e10 = this._map.layerPointToLatLng(t6)), this._tooltip.setLatLng(e10);
         }
-    });
-    var nn = Se.extend({
+    }), di.extend({
         options: {
             iconSize: [
                 12,
@@ -4047,20 +4169,20 @@ function fitBoundsPadding(e) {
             bgPos: null,
             className: "leaflet-div-icon"
         },
-        createIcon: function(t4) {
-            var i6, e6 = t4 && "DIV" === t4.tagName ? t4 : document.createElement("div"), n7 = this.options;
-            return n7.html instanceof Element ? (ai(e6), e6.appendChild(n7.html)) : e6.innerHTML = !1 !== n7.html ? n7.html : "", n7.bgPos && (i6 = A(n7.bgPos), e6.style.backgroundPosition = -i6.x + "px " + -i6.y + "px"), this._setIconStyles(e6, "icon"), e6;
+        createIcon: function(t6) {
+            var t6 = t6 && "DIV" === t6.tagName ? t6 : document.createElement("div"), e10 = this.options;
+            return e10.html instanceof Element ? (me(t6), t6.appendChild(e10.html)) : t6.innerHTML = !1 !== e10.html ? e10.html : "", e10.bgPos && (e10 = m(e10.bgPos), t6.style.backgroundPosition = -e10.x + "px " + -e10.y + "px"), this._setIconStyles(t6, "icon"), t6;
         },
         createShadow: function() {
             return null;
         }
-    });
-    Se.Default = Ze;
-    var on = Me.extend({
+    }));
+    di.Default = _i;
+    var Ni = o6.extend({
         options: {
             tileSize: 256,
             opacity: 1,
-            updateWhenIdle: yt,
+            updateWhenIdle: b.mobile,
             updateWhenZooming: !0,
             updateInterval: 200,
             zIndex: 1,
@@ -4074,297 +4196,292 @@ function fitBoundsPadding(e) {
             className: "",
             keepBuffer: 2
         },
-        initialize: function(t4) {
-            c(this, t4);
+        initialize: function(t6) {
+            c(this, t6);
         },
         onAdd: function() {
             this._initContainer(), this._levels = {
             }, this._tiles = {
-            }, this._resetView(), this._update();
+            }, this._resetView();
         },
-        beforeAdd: function(t4) {
-            t4._addZoomLimit(this);
+        beforeAdd: function(t6) {
+            t6._addZoomLimit(this);
         },
-        onRemove: function(t4) {
-            this._removeAllTiles(), ri(this._container), t4._removeZoomLimit(this), this._container = null, this._tileZoom = void 0;
+        onRemove: function(t6) {
+            this._removeAllTiles(), T(this._container), t6._removeZoomLimit(this), this._container = null, this._tileZoom = void 0;
         },
         bringToFront: function() {
-            return this._map && (hi(this._container), this._setAutoZIndex(Math.max)), this;
+            return this._map && (fe(this._container), this._setAutoZIndex(Math.max)), this;
         },
         bringToBack: function() {
-            return this._map && (ui(this._container), this._setAutoZIndex(Math.min)), this;
+            return this._map && (ge(this._container), this._setAutoZIndex(Math.min)), this;
         },
         getContainer: function() {
             return this._container;
         },
-        setOpacity: function(t4) {
-            return this.options.opacity = t4, this._updateOpacity(), this;
+        setOpacity: function(t6) {
+            return this.options.opacity = t6, this._updateOpacity(), this;
         },
-        setZIndex: function(t4) {
-            return this.options.zIndex = t4, this._updateZIndex(), this;
+        setZIndex: function(t6) {
+            return this.options.zIndex = t6, this._updateZIndex(), this;
         },
         isLoading: function() {
             return this._loading;
         },
         redraw: function() {
-            return this._map && (this._removeAllTiles(), this._update()), this;
+            var t6;
+            return this._map && (this._removeAllTiles(), (t6 = this._clampZoom(this._map.getZoom())) !== this._tileZoom && (this._tileZoom = t6, this._updateLevels()), this._update()), this;
         },
         getEvents: function() {
-            var t4 = {
+            var t6 = {
                 viewprereset: this._invalidateAll,
                 viewreset: this._resetView,
                 zoom: this._resetView,
                 moveend: this._onMoveEnd
             };
-            return this.options.updateWhenIdle || (this._onMove || (this._onMove = n(this._onMoveEnd, this.options.updateInterval, this)), t4.move = this._onMove), this._zoomAnimated && (t4.zoomanim = this._animateZoom), t4;
+            return this.options.updateWhenIdle || (this._onMove || (this._onMove = j(this._onMoveEnd, this.options.updateInterval, this)), t6.move = this._onMove), this._zoomAnimated && (t6.zoomanim = this._animateZoom), t6;
         },
         createTile: function() {
             return document.createElement("div");
         },
         getTileSize: function() {
-            var t4 = this.options.tileSize;
-            return t4 instanceof k ? t4 : new k(t4, t4);
+            var t6 = this.options.tileSize;
+            return t6 instanceof p ? t6 : new p(t6, t6);
         },
         _updateZIndex: function() {
             this._container && (void 0) !== this.options.zIndex && null !== this.options.zIndex && (this._container.style.zIndex = this.options.zIndex);
         },
-        _setAutoZIndex: function(t4) {
-            for(var i6, e6 = this.getPane().children, n7 = -t4(-1 / 0, 1 / 0), o7 = 0, s7 = e6.length; o7 < s7; o7++)i6 = e6[o7].style.zIndex, e6[o7] !== this._container && i6 && (n7 = t4(n7, +i6));
-            isFinite(n7) && (this.options.zIndex = n7 + t4(-1, 1), this._updateZIndex());
+        _setAutoZIndex: function(t6) {
+            for(var e10, i14 = this.getPane().children, n13 = -t6(-1 / 0, 1 / 0), o10 = 0, s8 = i14.length; o10 < s8; o10++)e10 = i14[o10].style.zIndex, i14[o10] !== this._container && e10 && (n13 = t6(n13, +e10));
+            isFinite(n13) && (this.options.zIndex = n13 + t6(-1, 1), this._updateZIndex());
         },
         _updateOpacity: function() {
-            if (this._map && !it) {
-                mi(this._container, this.options.opacity);
-                var t4 = +new Date, i6 = !1, e6 = !1;
-                for(var n7 in this._tiles){
-                    var o7, s7 = this._tiles[n7];
-                    s7.current && s7.loaded && (o7 = Math.min(1, (t4 - s7.loaded) / 200), mi(s7.el, o7), o7 < 1 ? i6 = !0 : (s7.active ? e6 = !0 : this._onOpaqueTile(s7), s7.active = !0));
+            if (this._map && !b.ielt9) {
+                C(this._container, this.options.opacity);
+                var t6, e10 = +new Date, i14 = !1, n13 = !1;
+                for(t6 in this._tiles){
+                    var o10, s8 = this._tiles[t6];
+                    s8.current && s8.loaded && (o10 = Math.min(1, (e10 - s8.loaded) / 200), C(s8.el, o10), o10 < 1 ? i14 = !0 : (s8.active ? n13 = !0 : this._onOpaqueTile(s8), s8.active = !0));
                 }
-                e6 && !this._noPrune && this._pruneTiles(), i6 && (z(this._fadeFrame), this._fadeFrame = M(this._updateOpacity, this));
+                n13 && !this._noPrune && this._pruneTiles(), i14 && (r(this._fadeFrame), this._fadeFrame = x(this._updateOpacity, this));
             }
         },
-        _onOpaqueTile: a,
+        _onOpaqueTile: u,
         _initContainer: function() {
-            this._container || (this._container = si("div", "leaflet-layer " + (this.options.className || "")), this._updateZIndex(), this.options.opacity < 1 && this._updateOpacity(), this.getPane().appendChild(this._container));
+            this._container || (this._container = P("div", "leaflet-layer " + (this.options.className || "")), this._updateZIndex(), this.options.opacity < 1 && this._updateOpacity(), this.getPane().appendChild(this._container));
         },
         _updateLevels: function() {
-            var t5 = this._tileZoom, i7 = this.options.maxZoom;
-            if ((void 0) !== t5) {
-                for(var e7 in this._levels)e7 = Number(e7), this._levels[e7].el.children.length || e7 === t5 ? (this._levels[e7].el.style.zIndex = i7 - Math.abs(t5 - e7), this._onUpdateLevel(e7)) : (ri(this._levels[e7].el), this._removeTilesAtZoom(e7), this._onRemoveLevel(e7), delete this._levels[e7]);
-                var n8 = this._levels[t5], o8 = this._map;
-                return n8 || ((n8 = this._levels[t5] = {
-                }).el = si("div", "leaflet-tile-container leaflet-zoom-animated", this._container), n8.el.style.zIndex = i7, n8.origin = o8.project(o8.unproject(o8.getPixelOrigin()), t5).round(), n8.zoom = t5, this._setZoomTransform(n8, o8.getCenter(), o8.getZoom()), a(n8.el.offsetWidth), this._onCreateLevel(n8)), this._level = n8;
+            var t7 = this._tileZoom, e11 = this.options.maxZoom;
+            if ((void 0) !== t7) {
+                for(var i15 in this._levels)i15 = Number(i15), this._levels[i15].el.children.length || i15 === t7 ? (this._levels[i15].el.style.zIndex = e11 - Math.abs(t7 - i15), this._onUpdateLevel(i15)) : (T(this._levels[i15].el), this._removeTilesAtZoom(i15), this._onRemoveLevel(i15), delete this._levels[i15]);
+                var n14 = this._levels[t7], o11 = this._map;
+                return n14 || ((n14 = this._levels[t7] = {
+                }).el = P("div", "leaflet-tile-container leaflet-zoom-animated", this._container), n14.el.style.zIndex = e11, n14.origin = o11.project(o11.unproject(o11.getPixelOrigin()), t7).round(), n14.zoom = t7, this._setZoomTransform(n14, o11.getCenter(), o11.getZoom()), u(n14.el.offsetWidth), this._onCreateLevel(n14)), this._level = n14;
             }
         },
-        _onUpdateLevel: a,
-        _onRemoveLevel: a,
-        _onCreateLevel: a,
+        _onUpdateLevel: u,
+        _onRemoveLevel: u,
+        _onCreateLevel: u,
         _pruneTiles: function() {
             if (this._map) {
-                var t5, i7, e8, n9 = this._map.getZoom();
-                if (n9 > this.options.maxZoom || n9 < this.options.minZoom) this._removeAllTiles();
+                var t7, e11, i16, n15 = this._map.getZoom();
+                if (n15 > this.options.maxZoom || n15 < this.options.minZoom) this._removeAllTiles();
                 else {
-                    for(t5 in this._tiles)(e8 = this._tiles[t5]).retain = e8.current;
-                    for(t5 in this._tiles)(e8 = this._tiles[t5]).current && !e8.active && (i7 = e8.coords, this._retainParent(i7.x, i7.y, i7.z, i7.z - 5) || this._retainChildren(i7.x, i7.y, i7.z, i7.z + 2));
-                    for(t5 in this._tiles)this._tiles[t5].retain || this._removeTile(t5);
+                    for(t7 in this._tiles)(i16 = this._tiles[t7]).retain = i16.current;
+                    for(t7 in this._tiles)(i16 = this._tiles[t7]).current && !i16.active && (e11 = i16.coords, this._retainParent(e11.x, e11.y, e11.z, e11.z - 5) || this._retainChildren(e11.x, e11.y, e11.z, e11.z + 2));
+                    for(t7 in this._tiles)this._tiles[t7].retain || this._removeTile(t7);
                 }
             }
         },
-        _removeTilesAtZoom: function(t6) {
-            for(var i8 in this._tiles)this._tiles[i8].coords.z === t6 && this._removeTile(i8);
+        _removeTilesAtZoom: function(t8) {
+            for(var e12 in this._tiles)this._tiles[e12].coords.z === t8 && this._removeTile(e12);
         },
         _removeAllTiles: function() {
-            for(var t6 in this._tiles)this._removeTile(t6);
+            for(var t8 in this._tiles)this._removeTile(t8);
         },
         _invalidateAll: function() {
-            for(var t6 in this._levels)ri(this._levels[t6].el), this._onRemoveLevel(Number(t6)), delete this._levels[t6];
+            for(var t8 in this._levels)T(this._levels[t8].el), this._onRemoveLevel(Number(t8)), delete this._levels[t8];
             this._removeAllTiles(), this._tileZoom = void 0;
         },
-        _retainParent: function(t6, i8, e9, n10) {
-            var o9 = Math.floor(t6 / 2), s8 = Math.floor(i8 / 2), r7 = e9 - 1, a5 = new k(+o9, +s8);
-            a5.z = +r7;
-            var h2 = this._tileCoordsToKey(a5), u1 = this._tiles[h2];
-            return u1 && u1.active ? u1.retain = !0 : (u1 && u1.loaded && (u1.retain = !0), n10 < r7 && this._retainParent(o9, s8, r7, n10));
+        _retainParent: function(t8, e12, i17, n16) {
+            var t8 = Math.floor(t8 / 2), e12 = Math.floor(e12 / 2), i17 = i17 - 1, o12 = new p(+t8, +e12), o12 = (o12.z = i17, this._tileCoordsToKey(o12)), o12 = this._tiles[o12];
+            return o12 && o12.active ? o12.retain = !0 : (o12 && o12.loaded && (o12.retain = !0), n16 < i17 && this._retainParent(t8, e12, i17, n16));
         },
-        _retainChildren: function(t6, i8, e9, n10) {
-            for(var o9 = 2 * t6; o9 < 2 * t6 + 2; o9++)for(var s8 = 2 * i8; s8 < 2 * i8 + 2; s8++){
-                var r7 = new k(o9, s8);
-                r7.z = e9 + 1;
-                var a5 = this._tileCoordsToKey(r7), h2 = this._tiles[a5];
-                h2 && h2.active ? h2.retain = !0 : (h2 && h2.loaded && (h2.retain = !0), e9 + 1 < n10 && this._retainChildren(o9, s8, e9 + 1, n10));
+        _retainChildren: function(t8, e12, i17, n16) {
+            for(var o12 = 2 * t8; o12 < 2 * t8 + 2; o12++)for(var s9 = 2 * e12; s9 < 2 * e12 + 2; s9++){
+                var r9 = new p(o12, s9), r9 = (r9.z = i17 + 1, this._tileCoordsToKey(r9)), r9 = this._tiles[r9];
+                r9 && r9.active ? r9.retain = !0 : (r9 && r9.loaded && (r9.retain = !0), i17 + 1 < n16 && this._retainChildren(o12, s9, i17 + 1, n16));
             }
         },
-        _resetView: function(t6) {
-            var i8 = t6 && (t6.pinch || t6.flyTo);
-            this._setView(this._map.getCenter(), this._map.getZoom(), i8, i8);
+        _resetView: function(t8) {
+            t8 = t8 && (t8.pinch || t8.flyTo);
+            this._setView(this._map.getCenter(), this._map.getZoom(), t8, t8);
         },
-        _animateZoom: function(t6) {
-            this._setView(t6.center, t6.zoom, !0, t6.noUpdate);
+        _animateZoom: function(t8) {
+            this._setView(t8.center, t8.zoom, !0, t8.noUpdate);
         },
-        _clampZoom: function(t6) {
-            var i8 = this.options;
-            return (void 0) !== i8.minNativeZoom && t6 < i8.minNativeZoom ? i8.minNativeZoom : (void 0) !== i8.maxNativeZoom && i8.maxNativeZoom < t6 ? i8.maxNativeZoom : t6;
+        _clampZoom: function(t8) {
+            var e12 = this.options;
+            return (void 0) !== e12.minNativeZoom && t8 < e12.minNativeZoom ? e12.minNativeZoom : (void 0) !== e12.maxNativeZoom && e12.maxNativeZoom < t8 ? e12.maxNativeZoom : t8;
         },
-        _setView: function(t6, i8, e9, n10) {
-            var o9 = Math.round(i8), o9 = (void 0) !== this.options.maxZoom && o9 > this.options.maxZoom || (void 0) !== this.options.minZoom && o9 < this.options.minZoom ? void 0 : this._clampZoom(o9), s8 = this.options.updateWhenZooming && o9 !== this._tileZoom;
-            n10 && !s8 || (this._tileZoom = o9, this._abortLoading && this._abortLoading(), this._updateLevels(), this._resetGrid(), (void 0) !== o9 && this._update(t6), e9 || this._pruneTiles(), this._noPrune = !!e9), this._setZoomTransforms(t6, i8);
+        _setView: function(t8, e12, i17, n16) {
+            var o12 = Math.round(e12), o12 = (void 0) !== this.options.maxZoom && o12 > this.options.maxZoom || (void 0) !== this.options.minZoom && o12 < this.options.minZoom ? void 0 : this._clampZoom(o12), s9 = this.options.updateWhenZooming && o12 !== this._tileZoom;
+            n16 && !s9 || (this._tileZoom = o12, this._abortLoading && this._abortLoading(), this._updateLevels(), this._resetGrid(), (void 0) !== o12 && this._update(t8), i17 || this._pruneTiles(), this._noPrune = !!i17), this._setZoomTransforms(t8, e12);
         },
-        _setZoomTransforms: function(t6, i8) {
-            for(var e9 in this._levels)this._setZoomTransform(this._levels[e9], t6, i8);
+        _setZoomTransforms: function(t8, e12) {
+            for(var i17 in this._levels)this._setZoomTransform(this._levels[i17], t8, e12);
         },
-        _setZoomTransform: function(t6, i8, e9) {
-            var n10 = this._map.getZoomScale(e9, t6.zoom), o9 = t6.origin.multiplyBy(n10).subtract(this._map._getNewPixelOrigin(i8, e9)).round();
-            vt ? gi(t6.el, o9, n10) : vi(t6.el, o9);
+        _setZoomTransform: function(t8, e12, i17) {
+            var n16 = this._map.getZoomScale(i17, t8.zoom), e12 = t8.origin.multiplyBy(n16).subtract(this._map._getNewPixelOrigin(e12, i17)).round();
+            b.any3d ? be(t8.el, e12, n16) : Z(t8.el, e12);
         },
         _resetGrid: function() {
-            var t6 = this._map, i8 = t6.options.crs, e9 = this._tileSize = this.getTileSize(), n10 = this._tileZoom, o9 = this._map.getPixelWorldBounds(this._tileZoom);
-            o9 && (this._globalTileRange = this._pxBoundsToTileRange(o9)), this._wrapX = i8.wrapLng && !this.options.noWrap && [
-                Math.floor(t6.project([
+            var t8 = this._map, e12 = t8.options.crs, i17 = this._tileSize = this.getTileSize(), n16 = this._tileZoom, o12 = this._map.getPixelWorldBounds(this._tileZoom);
+            o12 && (this._globalTileRange = this._pxBoundsToTileRange(o12)), this._wrapX = e12.wrapLng && !this.options.noWrap && [
+                Math.floor(t8.project([
                     0,
-                    i8.wrapLng[0]
-                ], n10).x / e9.x),
-                Math.ceil(t6.project([
+                    e12.wrapLng[0]
+                ], n16).x / i17.x),
+                Math.ceil(t8.project([
                     0,
-                    i8.wrapLng[1]
-                ], n10).x / e9.y)
-            ], this._wrapY = i8.wrapLat && !this.options.noWrap && [
-                Math.floor(t6.project([
-                    i8.wrapLat[0],
+                    e12.wrapLng[1]
+                ], n16).x / i17.y)
+            ], this._wrapY = e12.wrapLat && !this.options.noWrap && [
+                Math.floor(t8.project([
+                    e12.wrapLat[0],
                     0
-                ], n10).y / e9.x),
-                Math.ceil(t6.project([
-                    i8.wrapLat[1],
+                ], n16).y / i17.x),
+                Math.ceil(t8.project([
+                    e12.wrapLat[1],
                     0
-                ], n10).y / e9.y)
+                ], n16).y / i17.y)
             ];
         },
         _onMoveEnd: function() {
             this._map && !this._map._animatingZoom && this._update();
         },
-        _getTiledPixelBounds: function(t6) {
-            var i8 = this._map, e9 = i8._animatingZoom ? Math.max(i8._animateToZoom, i8.getZoom()) : i8.getZoom(), n10 = i8.getZoomScale(e9, this._tileZoom), o9 = i8.project(t6, this._tileZoom).floor(), s8 = i8.getSize().divideBy(2 * n10);
-            return new I(o9.subtract(s8), o9.add(s8));
+        _getTiledPixelBounds: function(t8) {
+            var e12 = this._map, i17 = e12._animatingZoom ? Math.max(e12._animateToZoom, e12.getZoom()) : e12.getZoom(), i17 = e12.getZoomScale(i17, this._tileZoom), t8 = e12.project(t8, this._tileZoom).floor(), e12 = e12.getSize().divideBy(2 * i17);
+            return new f(t8.subtract(e12), t8.add(e12));
         },
-        _update: function(t6) {
-            var i8 = this._map;
-            if (i8) {
-                var e9 = this._clampZoom(i8.getZoom());
-                if ((void 0) === t6 && (t6 = i8.getCenter()), (void 0) !== this._tileZoom) {
-                    var n10 = this._getTiledPixelBounds(t6), o9 = this._pxBoundsToTileRange(n10), s8 = o9.getCenter(), r8 = [], a6 = this.options.keepBuffer, h3 = new I(o9.getBottomLeft().subtract([
-                        a6,
-                        -a6
-                    ]), o9.getTopRight().add([
-                        a6,
-                        -a6
+        _update: function(t8) {
+            var e12 = this._map;
+            if (e12) {
+                var i17 = this._clampZoom(e12.getZoom());
+                if ((void 0) === t8 && (t8 = e12.getCenter()), (void 0) !== this._tileZoom) {
+                    var n16, e12 = this._getTiledPixelBounds(t8), o12 = this._pxBoundsToTileRange(e12), s9 = o12.getCenter(), r10 = [], e12 = this.options.keepBuffer, a5 = new f(o12.getBottomLeft().subtract([
+                        e12,
+                        -e12
+                    ]), o12.getTopRight().add([
+                        e12,
+                        -e12
                     ]));
-                    if (!(isFinite(o9.min.x) && isFinite(o9.min.y) && isFinite(o9.max.x) && isFinite(o9.max.y))) throw new Error("Attempted to load an infinite number of tiles");
-                    for(var u1 in this._tiles){
-                        var l1 = this._tiles[u1].coords;
-                        l1.z === this._tileZoom && h3.contains(new k(l1.x, l1.y)) || (this._tiles[u1].current = !1);
+                    if (!(isFinite(o12.min.x) && isFinite(o12.min.y) && isFinite(o12.max.x) && isFinite(o12.max.y))) throw new Error("Attempted to load an infinite number of tiles");
+                    for(n16 in this._tiles){
+                        var h4 = this._tiles[n16].coords;
+                        h4.z === this._tileZoom && a5.contains(new p(h4.x, h4.y)) || (this._tiles[n16].current = !1);
                     }
-                    if (1 < Math.abs(e9 - this._tileZoom)) this._setView(t6, e9);
+                    if (1 < Math.abs(i17 - this._tileZoom)) this._setView(t8, i17);
                     else {
-                        for(var c3 = o9.min.y; c3 <= o9.max.y; c3++)for(var _1 = o9.min.x; _1 <= o9.max.x; _1++){
-                            var d1, p1 = new k(_1, c3);
-                            p1.z = this._tileZoom, this._isValidTile(p1) && ((d1 = this._tiles[this._tileCoordsToKey(p1)]) ? d1.current = !0 : r8.push(p1));
+                        for(var l2 = o12.min.y; l2 <= o12.max.y; l2++)for(var u2 = o12.min.x; u2 <= o12.max.x; u2++){
+                            var c3, d2 = new p(u2, l2);
+                            d2.z = this._tileZoom, this._isValidTile(d2) && ((c3 = this._tiles[this._tileCoordsToKey(d2)]) ? c3.current = !0 : r10.push(d2));
                         }
-                        if (r8.sort(function(t7, i9) {
-                            return t7.distanceTo(s8) - i9.distanceTo(s8);
-                        }), 0 !== r8.length) {
+                        if (r10.sort(function(t9, e13) {
+                            return t9.distanceTo(s9) - e13.distanceTo(s9);
+                        }), 0 !== r10.length) {
                             this._loading || (this._loading = !0, this.fire("loading"));
-                            for(var m1 = document.createDocumentFragment(), _1 = 0; _1 < r8.length; _1++)this._addTile(r8[_1], m1);
-                            this._level.el.appendChild(m1);
+                            for(var _2 = document.createDocumentFragment(), u2 = 0; u2 < r10.length; u2++)this._addTile(r10[u2], _2);
+                            this._level.el.appendChild(_2);
                         }
                     }
                 }
             }
         },
-        _isValidTile: function(t6) {
-            var i8 = this._map.options.crs;
-            if (!i8.infinite) {
-                var e10 = this._globalTileRange;
-                if (!i8.wrapLng && (t6.x < e10.min.x || t6.x > e10.max.x) || !i8.wrapLat && (t6.y < e10.min.y || t6.y > e10.max.y)) return !1;
+        _isValidTile: function(t8) {
+            var e12 = this._map.options.crs;
+            if (!e12.infinite) {
+                var i18 = this._globalTileRange;
+                if (!e12.wrapLng && (t8.x < i18.min.x || t8.x > i18.max.x) || !e12.wrapLat && (t8.y < i18.min.y || t8.y > i18.max.y)) return !1;
             }
-            if (!this.options.bounds) return !0;
-            var n11 = this._tileCoordsToBounds(t6);
-            return N(this.options.bounds).overlaps(n11);
+            return !this.options.bounds || (e12 = this._tileCoordsToBounds(t8), g(this.options.bounds).overlaps(e12));
         },
-        _keyToBounds: function(t6) {
-            return this._tileCoordsToBounds(this._keyToTileCoords(t6));
+        _keyToBounds: function(t8) {
+            return this._tileCoordsToBounds(this._keyToTileCoords(t8));
         },
-        _tileCoordsToNwSe: function(t6) {
-            var i8 = this._map, e11 = this.getTileSize(), n11 = t6.scaleBy(e11), o10 = n11.add(e11);
+        _tileCoordsToNwSe: function(t8) {
+            var e12 = this._map, i19 = this.getTileSize(), n17 = t8.scaleBy(i19), i19 = n17.add(i19);
             return [
-                i8.unproject(n11, t6.z),
-                i8.unproject(o10, t6.z)
+                e12.unproject(n17, t8.z),
+                e12.unproject(i19, t8.z)
             ];
         },
-        _tileCoordsToBounds: function(t6) {
-            var i8 = this._tileCoordsToNwSe(t6), e11 = new R(i8[0], i8[1]);
-            return this.options.noWrap || (e11 = this._map.wrapLatLngBounds(e11)), e11;
+        _tileCoordsToBounds: function(t8) {
+            t8 = this._tileCoordsToNwSe(t8), t8 = new s(t8[0], t8[1]);
+            return t8 = this.options.noWrap ? t8 : this._map.wrapLatLngBounds(t8);
         },
-        _tileCoordsToKey: function(t6) {
-            return t6.x + ":" + t6.y + ":" + t6.z;
+        _tileCoordsToKey: function(t8) {
+            return t8.x + ":" + t8.y + ":" + t8.z;
         },
-        _keyToTileCoords: function(t6) {
-            var i8 = t6.split(":"), e11 = new k(+i8[0], +i8[1]);
-            return e11.z = +i8[2], e11;
+        _keyToTileCoords: function(t8) {
+            var t8 = t8.split(":"), e12 = new p(+t8[0], +t8[1]);
+            return e12.z = +t8[2], e12;
         },
-        _removeTile: function(t6) {
-            var i8 = this._tiles[t6];
-            i8 && (ri(i8.el), delete this._tiles[t6], this.fire("tileunload", {
-                tile: i8.el,
-                coords: this._keyToTileCoords(t6)
+        _removeTile: function(t8) {
+            var e12 = this._tiles[t8];
+            e12 && (T(e12.el), delete this._tiles[t8], this.fire("tileunload", {
+                tile: e12.el,
+                coords: this._keyToTileCoords(t8)
             }));
         },
-        _initTile: function(t6) {
-            ci(t6, "leaflet-tile");
-            var i8 = this.getTileSize();
-            t6.style.width = i8.x + "px", t6.style.height = i8.y + "px", t6.onselectstart = a, t6.onmousemove = a, it && this.options.opacity < 1 && mi(t6, this.options.opacity), ot && !st && (t6.style.WebkitBackfaceVisibility = "hidden");
+        _initTile: function(t8) {
+            M(t8, "leaflet-tile");
+            var e12 = this.getTileSize();
+            t8.style.width = e12.x + "px", t8.style.height = e12.y + "px", t8.onselectstart = u, t8.onmousemove = u, b.ielt9 && this.options.opacity < 1 && C(t8, this.options.opacity);
         },
-        _addTile: function(t6, i8) {
-            var e11 = this._getTilePos(t6), n11 = this._tileCoordsToKey(t6), o10 = this.createTile(this._wrapCoords(t6), p(this._tileReady, this, t6));
-            this._initTile(o10), this.createTile.length < 2 && M(p(this._tileReady, this, t6, null, o10)), vi(o10, e11), this._tiles[n11] = {
-                el: o10,
-                coords: t6,
+        _addTile: function(t8, e12) {
+            var i19 = this._getTilePos(t8), n17 = this._tileCoordsToKey(t8), o13 = this.createTile(this._wrapCoords(t8), a2(this._tileReady, this, t8));
+            this._initTile(o13), this.createTile.length < 2 && x(a2(this._tileReady, this, t8, null, o13)), Z(o13, i19), this._tiles[n17] = {
+                el: o13,
+                coords: t8,
                 current: !0
-            }, i8.appendChild(o10), this.fire("tileloadstart", {
-                tile: o10,
-                coords: t6
+            }, e12.appendChild(o13), this.fire("tileloadstart", {
+                tile: o13,
+                coords: t8
             });
         },
-        _tileReady: function(t6, i8, e11) {
-            i8 && this.fire("tileerror", {
-                error: i8,
-                tile: e11,
-                coords: t6
+        _tileReady: function(t8, e12, i19) {
+            e12 && this.fire("tileerror", {
+                error: e12,
+                tile: i19,
+                coords: t8
             });
-            var n11 = this._tileCoordsToKey(t6);
-            (e11 = this._tiles[n11]) && (e11.loaded = +new Date, this._map._fadeAnimated ? (mi(e11.el, 0), z(this._fadeFrame), this._fadeFrame = M(this._updateOpacity, this)) : (e11.active = !0, this._pruneTiles()), i8 || (ci(e11.el, "leaflet-tile-loaded"), this.fire("tileload", {
-                tile: e11.el,
-                coords: t6
-            })), this._noTilesToLoad() && (this._loading = !1, this.fire("load"), it || !this._map._fadeAnimated ? M(this._pruneTiles, this) : setTimeout(p(this._pruneTiles, this), 250)));
+            var n17 = this._tileCoordsToKey(t8);
+            (i19 = this._tiles[n17]) && (i19.loaded = +new Date, this._map._fadeAnimated ? (C(i19.el, 0), r(this._fadeFrame), this._fadeFrame = x(this._updateOpacity, this)) : (i19.active = !0, this._pruneTiles()), e12 || (M(i19.el, "leaflet-tile-loaded"), this.fire("tileload", {
+                tile: i19.el,
+                coords: t8
+            })), this._noTilesToLoad() && (this._loading = !1, this.fire("load"), b.ielt9 || !this._map._fadeAnimated ? x(this._pruneTiles, this) : setTimeout(a2(this._pruneTiles, this), 250)));
         },
-        _getTilePos: function(t6) {
-            return t6.scaleBy(this.getTileSize()).subtract(this._level.origin);
+        _getTilePos: function(t8) {
+            return t8.scaleBy(this.getTileSize()).subtract(this._level.origin);
         },
-        _wrapCoords: function(t6) {
-            var i8 = new k(this._wrapX ? o(t6.x, this._wrapX) : t6.x, this._wrapY ? o(t6.y, this._wrapY) : t6.y);
-            return i8.z = t6.z, i8;
+        _wrapCoords: function(t8) {
+            var e12 = new p(this._wrapX ? H(t8.x, this._wrapX) : t8.x, this._wrapY ? H(t8.y, this._wrapY) : t8.y);
+            return e12.z = t8.z, e12;
         },
-        _pxBoundsToTileRange: function(t6) {
-            var i8 = this.getTileSize();
-            return new I(t6.min.unscaleBy(i8).floor(), t6.max.unscaleBy(i8).ceil().subtract([
+        _pxBoundsToTileRange: function(t8) {
+            var e12 = this.getTileSize();
+            return new f(t8.min.unscaleBy(e12).floor(), t8.max.unscaleBy(e12).ceil().subtract([
                 1,
                 1
             ]));
         },
         _noTilesToLoad: function() {
-            for(var t6 in this._tiles)if (!this._tiles[t6].loaded) return !1;
+            for(var t8 in this._tiles)if (!this._tiles[t8].loaded) return !1;
             return !0;
         }
     });
-    var sn = on.extend({
+    var Di = Ni.extend({
         options: {
             minZoom: 0,
             maxZoom: 18,
@@ -4374,62 +4491,66 @@ function fitBoundsPadding(e) {
             tms: !1,
             zoomReverse: !1,
             detectRetina: !1,
-            crossOrigin: !1
+            crossOrigin: !1,
+            referrerPolicy: !1
         },
-        initialize: function(t6, i8) {
-            this._url = t6, (i8 = c(this, i8)).detectRetina && zt && 0 < i8.maxZoom && (i8.tileSize = Math.floor(i8.tileSize / 2), i8.zoomReverse ? (i8.zoomOffset--, i8.minZoom++) : (i8.zoomOffset++, i8.maxZoom--), i8.minZoom = Math.max(0, i8.minZoom)), "string" == typeof i8.subdomains && (i8.subdomains = i8.subdomains.split("")), ot || this.on("tileunload", this._onTileRemove);
+        initialize: function(t8, e12) {
+            this._url = t8, (e12 = c(this, e12)).detectRetina && b.retina && 0 < e12.maxZoom ? (e12.tileSize = Math.floor(e12.tileSize / 2), e12.zoomReverse ? (e12.zoomOffset--, e12.minZoom = Math.min(e12.maxZoom, e12.minZoom + 1)) : (e12.zoomOffset++, e12.maxZoom = Math.max(e12.minZoom, e12.maxZoom - 1)), e12.minZoom = Math.max(0, e12.minZoom)) : e12.zoomReverse ? e12.minZoom = Math.min(e12.maxZoom, e12.minZoom) : e12.maxZoom = Math.max(e12.minZoom, e12.maxZoom), "string" == typeof e12.subdomains && (e12.subdomains = e12.subdomains.split("")), this.on("tileunload", this._onTileRemove);
         },
-        setUrl: function(t6, i8) {
-            return this._url === t6 && (void 0) === i8 && (i8 = !0), this._url = t6, i8 || this.redraw(), this;
+        setUrl: function(t8, e12) {
+            return this._url === t8 && (void 0) === e12 && (e12 = !0), this._url = t8, e12 || this.redraw(), this;
         },
-        createTile: function(t6, i8) {
-            var e11 = document.createElement("img");
-            return zi(e11, "load", p(this._tileOnLoad, this, i8, e11)), zi(e11, "error", p(this._tileOnError, this, i8, e11)), !this.options.crossOrigin && "" !== this.options.crossOrigin || (e11.crossOrigin = !0 === this.options.crossOrigin ? "" : this.options.crossOrigin), e11.alt = "", e11.setAttribute("role", "presentation"), e11.src = this.getTileUrl(t6), e11;
+        createTile: function(t8, e12) {
+            var i19 = document.createElement("img");
+            return S(i19, "load", a2(this._tileOnLoad, this, e12, i19)), S(i19, "error", a2(this._tileOnError, this, e12, i19)), !this.options.crossOrigin && "" !== this.options.crossOrigin || (i19.crossOrigin = !0 === this.options.crossOrigin ? "" : this.options.crossOrigin), "string" == typeof this.options.referrerPolicy && (i19.referrerPolicy = this.options.referrerPolicy), i19.alt = "", i19.src = this.getTileUrl(t8), i19;
         },
-        getTileUrl: function(t6) {
-            var i8, e11 = {
-                r: zt ? "@2x" : "",
-                s: this._getSubdomain(t6),
-                x: t6.x,
-                y: t6.y,
+        getTileUrl: function(t8) {
+            var e12 = {
+                r: b.retina ? "@2x" : "",
+                s: this._getSubdomain(t8),
+                x: t8.x,
+                y: t8.y,
                 z: this._getZoomForUrl()
             };
-            return this._map && !this._map.options.crs.infinite && (i8 = this._globalTileRange.max.y - t6.y, this.options.tms && (e11.y = i8), e11["-y"] = i8), f(this._url, h(e11, this.options));
+            return this._map && !this._map.options.crs.infinite && (t8 = this._globalTileRange.max.y - t8.y, this.options.tms && (e12.y = t8), e12["-y"] = t8), q(this._url, l(e12, this.options));
         },
-        _tileOnLoad: function(t6, i8) {
-            it ? setTimeout(p(t6, this, null, i8), 0) : t6(null, i8);
+        _tileOnLoad: function(t8, e12) {
+            b.ielt9 ? setTimeout(a2(t8, this, null, e12), 0) : t8(null, e12);
         },
-        _tileOnError: function(t6, i8, e11) {
-            var n11 = this.options.errorTileUrl;
-            n11 && i8.getAttribute("src") !== n11 && (i8.src = n11), t6(e11, i8);
+        _tileOnError: function(t8, e12, i19) {
+            var n17 = this.options.errorTileUrl;
+            n17 && e12.getAttribute("src") !== n17 && (e12.src = n17), t8(i19, e12);
         },
-        _onTileRemove: function(t6) {
-            t6.tile.onload = null;
+        _onTileRemove: function(t8) {
+            t8.tile.onload = null;
         },
         _getZoomForUrl: function() {
-            var t6 = this._tileZoom, i8 = this.options.maxZoom;
-            return this.options.zoomReverse && (t6 = i8 - t6), t6 + this.options.zoomOffset;
+            var t8 = this._tileZoom, e12 = this.options.maxZoom;
+            return (t8 = this.options.zoomReverse ? e12 - t8 : t8) + this.options.zoomOffset;
         },
-        _getSubdomain: function(t6) {
-            var i8 = Math.abs(t6.x + t6.y) % this.options.subdomains.length;
-            return this.options.subdomains[i8];
+        _getSubdomain: function(t8) {
+            t8 = Math.abs(t8.x + t8.y) % this.options.subdomains.length;
+            return this.options.subdomains[t8];
         },
         _abortLoading: function() {
-            var t6, i8;
-            for(t6 in this._tiles)this._tiles[t6].coords.z !== this._tileZoom && ((i8 = this._tiles[t6].el).onload = a, i8.onerror = a, i8.complete || (i8.src = y, ri(i8), delete this._tiles[t6]));
+            var t8, e12, i19;
+            for(t8 in this._tiles)this._tiles[t8].coords.z !== this._tileZoom && ((i19 = this._tiles[t8].el).onload = u, i19.onerror = u, i19.complete || (i19.src = K, e12 = this._tiles[t8].coords, T(i19), delete this._tiles[t8], this.fire("tileabort", {
+                tile: i19,
+                coords: e12
+            })));
         },
-        _removeTile: function(t6) {
-            var i8 = this._tiles[t6];
-            if (i8) return at || i8.el.setAttribute("src", y), on.prototype._removeTile.call(this, t6);
+        _removeTile: function(t8) {
+            var e12 = this._tiles[t8];
+            if (e12) return e12.el.setAttribute("src", K), Ni.prototype._removeTile.call(this, t8);
         },
-        _tileReady: function(t6, i8, e11) {
-            if (this._map && (!e11 || e11.getAttribute("src") !== y)) return on.prototype._tileReady.call(this, t6, i8, e11);
+        _tileReady: function(t8, e12, i19) {
+            if (this._map && (!i19 || i19.getAttribute("src") !== K)) return Ni.prototype._tileReady.call(this, t8, e12, i19);
         }
     });
-    function rn(t6, i8) {
-        return new sn(t6, i8);
+    function ji(t8, e12) {
+        return new Di(t8, e12);
     }
-    var an = sn.extend({
+    var Hi = Di.extend({
         defaultWmsParams: {
             service: "WMS",
             request: "GetMap",
@@ -4443,394 +4564,388 @@ function fitBoundsPadding(e) {
             crs: null,
             uppercase: !1
         },
-        initialize: function(t6, i8) {
-            this._url = t6;
-            var e11 = h({
+        initialize: function(t8, e12) {
+            this._url = t8;
+            var i19, n17 = l({
             }, this.defaultWmsParams);
-            for(var n11 in i8)n11 in this.options || (e11[n11] = i8[n11]);
-            var o10 = (i8 = c(this, i8)).detectRetina && zt ? 2 : 1, s9 = this.getTileSize();
-            e11.width = s9.x * o10, e11.height = s9.y * o10, this.wmsParams = e11;
+            for(i19 in e12)i19 in this.options || (n17[i19] = e12[i19]);
+            var t8 = (e12 = c(this, e12)).detectRetina && b.retina ? 2 : 1, o13 = this.getTileSize();
+            n17.width = o13.x * t8, n17.height = o13.y * t8, this.wmsParams = n17;
         },
-        onAdd: function(t6) {
-            this._crs = this.options.crs || t6.options.crs, this._wmsVersion = parseFloat(this.wmsParams.version);
-            var i8 = 1.3 <= this._wmsVersion ? "crs" : "srs";
-            this.wmsParams[i8] = this._crs.code, sn.prototype.onAdd.call(this, t6);
+        onAdd: function(t8) {
+            this._crs = this.options.crs || t8.options.crs, this._wmsVersion = parseFloat(this.wmsParams.version);
+            var e12 = 1.3 <= this._wmsVersion ? "crs" : "srs";
+            this.wmsParams[e12] = this._crs.code, Di.prototype.onAdd.call(this, t8);
         },
-        getTileUrl: function(t6) {
-            var i8 = this._tileCoordsToNwSe(t6), e11 = this._crs, n11 = O(e11.project(i8[0]), e11.project(i8[1])), o10 = n11.min, s9 = n11.max, r9 = (1.3 <= this._wmsVersion && this._crs === be ? [
-                o10.y,
-                o10.x,
-                s9.y,
-                s9.x
+        getTileUrl: function(t8) {
+            var e12 = this._tileCoordsToNwSe(t8), i19 = this._crs, i19 = _(i19.project(e12[0]), i19.project(e12[1])), e12 = i19.min, i19 = i19.max, e12 = (1.3 <= this._wmsVersion && this._crs === li ? [
+                e12.y,
+                e12.x,
+                i19.y,
+                i19.x
             ] : [
-                o10.x,
-                o10.y,
-                s9.x,
-                s9.y
-            ]).join(","), a7 = sn.prototype.getTileUrl.call(this, t6);
-            return a7 + _(this.wmsParams, a7, this.options.uppercase) + (this.options.uppercase ? "&BBOX=" : "&bbox=") + r9;
+                e12.x,
+                e12.y,
+                i19.x,
+                i19.y
+            ]).join(","), i19 = Di.prototype.getTileUrl.call(this, t8);
+            return i19 + U(this.wmsParams, i19, this.options.uppercase) + (this.options.uppercase ? "&BBOX=" : "&bbox=") + e12;
         },
-        setParams: function(t6, i8) {
-            return h(this.wmsParams, t6), i8 || this.redraw(), this;
+        setParams: function(t8, e12) {
+            return l(this.wmsParams, t8), e12 || this.redraw(), this;
         }
     });
-    sn.WMS = an, rn.wms = function(t6, i8) {
-        return new an(t6, i8);
+    Di.WMS = Hi, ji.wms = function(t8, e12) {
+        return new Hi(t8, e12);
     };
-    var hn = Me.extend({
+    var Wi = o6.extend({
         options: {
-            padding: 0.1,
-            tolerance: 0
+            padding: 0.1
         },
-        initialize: function(t6) {
-            c(this, t6), m(this), this._layers = this._layers || {
+        initialize: function(t8) {
+            c(this, t8), h(this), this._layers = this._layers || {
             };
         },
         onAdd: function() {
-            this._container || (this._initContainer(), this._zoomAnimated && ci(this._container, "leaflet-zoom-animated")), this.getPane().appendChild(this._container), this._update(), this.on("update", this._updatePaths, this);
+            this._container || (this._initContainer(), M(this._container, "leaflet-zoom-animated")), this.getPane().appendChild(this._container), this._update(), this.on("update", this._updatePaths, this);
         },
         onRemove: function() {
             this.off("update", this._updatePaths, this), this._destroyContainer();
         },
         getEvents: function() {
-            var t6 = {
+            var t8 = {
                 viewreset: this._reset,
                 zoom: this._onZoom,
                 moveend: this._update,
                 zoomend: this._onZoomEnd
             };
-            return this._zoomAnimated && (t6.zoomanim = this._onAnimZoom), t6;
+            return this._zoomAnimated && (t8.zoomanim = this._onAnimZoom), t8;
         },
-        _onAnimZoom: function(t6) {
-            this._updateTransform(t6.center, t6.zoom);
+        _onAnimZoom: function(t8) {
+            this._updateTransform(t8.center, t8.zoom);
         },
         _onZoom: function() {
             this._updateTransform(this._map.getCenter(), this._map.getZoom());
         },
-        _updateTransform: function(t6, i8) {
-            var e11 = this._map.getZoomScale(i8, this._zoom), n11 = yi(this._container), o10 = this._map.getSize().multiplyBy(0.5 + this.options.padding), s9 = this._map.project(this._center, i8), r9 = this._map.project(t6, i8).subtract(s9), a7 = o10.multiplyBy(-e11).add(n11).add(o10).subtract(r9);
-            vt ? gi(this._container, a7, e11) : vi(this._container, a7);
+        _updateTransform: function(t8, e12) {
+            var i19 = this._map.getZoomScale(e12, this._zoom), n17 = this._map.getSize().multiplyBy(0.5 + this.options.padding), o13 = this._map.project(this._center, e12), n17 = n17.multiplyBy(-i19).add(o13).subtract(this._map._getNewPixelOrigin(t8, e12));
+            b.any3d ? be(this._container, n17, i19) : Z(this._container, n17);
         },
         _reset: function() {
-            for(var t6 in this._update(), this._updateTransform(this._center, this._zoom), this._layers)this._layers[t6]._reset();
+            for(var t8 in this._update(), this._updateTransform(this._center, this._zoom), this._layers)this._layers[t8]._reset();
         },
         _onZoomEnd: function() {
-            for(var t6 in this._layers)this._layers[t6]._project();
+            for(var t8 in this._layers)this._layers[t8]._project();
         },
         _updatePaths: function() {
-            for(var t6 in this._layers)this._layers[t6]._update();
+            for(var t8 in this._layers)this._layers[t8]._update();
         },
         _update: function() {
-            var t6 = this.options.padding, i8 = this._map.getSize(), e11 = this._map.containerPointToLayerPoint(i8.multiplyBy(-t6)).round();
-            this._bounds = new I(e11, e11.add(i8.multiplyBy(1 + 2 * t6)).round()), this._center = this._map.getCenter(), this._zoom = this._map.getZoom();
+            var t8 = this.options.padding, e12 = this._map.getSize(), i19 = this._map.containerPointToLayerPoint(e12.multiplyBy(-t8)).round();
+            this._bounds = new f(i19, i19.add(e12.multiplyBy(1 + 2 * t8)).round()), this._center = this._map.getCenter(), this._zoom = this._map.getZoom();
         }
-    }), un = hn.extend({
+    }), Fi = Wi.extend({
+        options: {
+            tolerance: 0
+        },
         getEvents: function() {
-            var t6 = hn.prototype.getEvents.call(this);
-            return t6.viewprereset = this._onViewPreReset, t6;
+            var t8 = Wi.prototype.getEvents.call(this);
+            return t8.viewprereset = this._onViewPreReset, t8;
         },
         _onViewPreReset: function() {
             this._postponeUpdatePaths = !0;
         },
         onAdd: function() {
-            hn.prototype.onAdd.call(this), this._draw();
+            Wi.prototype.onAdd.call(this), this._draw();
         },
         _initContainer: function() {
-            var t6 = this._container = document.createElement("canvas");
-            zi(t6, "mousemove", this._onMouseMove, this), zi(t6, "click dblclick mousedown mouseup contextmenu", this._onClick, this), zi(t6, "mouseout", this._handleMouseOut, this), this._ctx = t6.getContext("2d");
+            var t8 = this._container = document.createElement("canvas");
+            S(t8, "mousemove", this._onMouseMove, this), S(t8, "click dblclick mousedown mouseup contextmenu", this._onClick, this), S(t8, "mouseout", this._handleMouseOut, this), t8._leaflet_disable_events = !0, this._ctx = t8.getContext("2d");
         },
         _destroyContainer: function() {
-            z(this._redrawRequest), delete this._ctx, ri(this._container), Si(this._container), delete this._container;
+            r(this._redrawRequest), delete this._ctx, T(this._container), k(this._container), delete this._container;
         },
         _updatePaths: function() {
             if (!this._postponeUpdatePaths) {
-                for(var t6 in this._redrawBounds = null, this._layers)this._layers[t6]._update();
+                for(var t8 in this._redrawBounds = null, this._layers)this._layers[t8]._update();
                 this._redraw();
             }
         },
         _update: function() {
-            var t7, i8, e11, n11;
-            this._map._animatingZoom && this._bounds || (hn.prototype._update.call(this), t7 = this._bounds, i8 = this._container, e11 = t7.getSize(), n11 = zt ? 2 : 1, vi(i8, t7.min), i8.width = n11 * e11.x, i8.height = n11 * e11.y, i8.style.width = e11.x + "px", i8.style.height = e11.y + "px", zt && this._ctx.scale(2, 2), this._ctx.translate(-t7.min.x, -t7.min.y), this.fire("update"));
+            var t9, e12, i19, n17;
+            this._map._animatingZoom && this._bounds || (Wi.prototype._update.call(this), t9 = this._bounds, e12 = this._container, i19 = t9.getSize(), n17 = b.retina ? 2 : 1, Z(e12, t9.min), e12.width = n17 * i19.x, e12.height = n17 * i19.y, e12.style.width = i19.x + "px", e12.style.height = i19.y + "px", b.retina && this._ctx.scale(2, 2), this._ctx.translate(-t9.min.x, -t9.min.y), this.fire("update"));
         },
         _reset: function() {
-            hn.prototype._reset.call(this), this._postponeUpdatePaths && (this._postponeUpdatePaths = !1, this._updatePaths());
+            Wi.prototype._reset.call(this), this._postponeUpdatePaths && (this._postponeUpdatePaths = !1, this._updatePaths());
         },
-        _initPath: function(t7) {
-            this._updateDashArray(t7);
-            var i8 = (this._layers[m(t7)] = t7)._order = {
-                layer: t7,
+        _initPath: function(t9) {
+            this._updateDashArray(t9);
+            t9 = (this._layers[h(t9)] = t9)._order = {
+                layer: t9,
                 prev: this._drawLast,
                 next: null
             };
-            this._drawLast && (this._drawLast.next = i8), this._drawLast = i8, this._drawFirst = this._drawFirst || this._drawLast;
+            this._drawLast && (this._drawLast.next = t9), this._drawLast = t9, this._drawFirst = this._drawFirst || this._drawLast;
         },
-        _addPath: function(t7) {
-            this._requestRedraw(t7);
+        _addPath: function(t9) {
+            this._requestRedraw(t9);
         },
-        _removePath: function(t7) {
-            var i8 = t7._order, e11 = i8.next, n11 = i8.prev;
-            e11 ? e11.prev = n11 : this._drawLast = n11, n11 ? n11.next = e11 : this._drawFirst = e11, delete t7._order, delete this._layers[m(t7)], this._requestRedraw(t7);
+        _removePath: function(t9) {
+            var e12 = t9._order, i19 = e12.next, e12 = e12.prev;
+            i19 ? i19.prev = e12 : this._drawLast = e12, e12 ? e12.next = i19 : this._drawFirst = i19, delete t9._order, delete this._layers[h(t9)], this._requestRedraw(t9);
         },
-        _updatePath: function(t7) {
-            this._extendRedrawBounds(t7), t7._project(), t7._update(), this._requestRedraw(t7);
+        _updatePath: function(t9) {
+            this._extendRedrawBounds(t9), t9._project(), t9._update(), this._requestRedraw(t9);
         },
-        _updateStyle: function(t7) {
-            this._updateDashArray(t7), this._requestRedraw(t7);
+        _updateStyle: function(t9) {
+            this._updateDashArray(t9), this._requestRedraw(t9);
         },
-        _updateDashArray: function(t7) {
-            if ("string" == typeof t7.options.dashArray) {
-                for(var i8, e11 = t7.options.dashArray.split(/[, ]+/), n11 = [], o10 = 0; o10 < e11.length; o10++){
-                    if (i8 = Number(e11[o10]), isNaN(i8)) return;
-                    n11.push(i8);
+        _updateDashArray: function(t9) {
+            if ("string" == typeof t9.options.dashArray) {
+                for(var e12, i19 = t9.options.dashArray.split(/[, ]+/), n17 = [], o13 = 0; o13 < i19.length; o13++){
+                    if (e12 = Number(i19[o13]), isNaN(e12)) return;
+                    n17.push(e12);
                 }
-                t7.options._dashArray = n11;
-            } else t7.options._dashArray = t7.options.dashArray;
+                t9.options._dashArray = n17;
+            } else t9.options._dashArray = t9.options.dashArray;
         },
-        _requestRedraw: function(t7) {
-            this._map && (this._extendRedrawBounds(t7), this._redrawRequest = this._redrawRequest || M(this._redraw, this));
+        _requestRedraw: function(t9) {
+            this._map && (this._extendRedrawBounds(t9), this._redrawRequest = this._redrawRequest || x(this._redraw, this));
         },
-        _extendRedrawBounds: function(t7) {
-            var i9;
-            t7._pxBounds && (i9 = (t7.options.weight || 0) + 1, this._redrawBounds = this._redrawBounds || new I, this._redrawBounds.extend(t7._pxBounds.min.subtract([
-                i9,
-                i9
-            ])), this._redrawBounds.extend(t7._pxBounds.max.add([
-                i9,
-                i9
+        _extendRedrawBounds: function(t9) {
+            var e13;
+            t9._pxBounds && (e13 = (t9.options.weight || 0) + 1, this._redrawBounds = this._redrawBounds || new f, this._redrawBounds.extend(t9._pxBounds.min.subtract([
+                e13,
+                e13
+            ])), this._redrawBounds.extend(t9._pxBounds.max.add([
+                e13,
+                e13
             ])));
         },
         _redraw: function() {
             this._redrawRequest = null, this._redrawBounds && (this._redrawBounds.min._floor(), this._redrawBounds.max._ceil()), this._clear(), this._draw(), this._redrawBounds = null;
         },
         _clear: function() {
-            var t7, i9 = this._redrawBounds;
-            i9 ? (t7 = i9.getSize(), this._ctx.clearRect(i9.min.x, i9.min.y, t7.x, t7.y)) : (this._ctx.save(), this._ctx.setTransform(1, 0, 0, 1, 0, 0), this._ctx.clearRect(0, 0, this._container.width, this._container.height), this._ctx.restore());
+            var t9, e13 = this._redrawBounds;
+            e13 ? (t9 = e13.getSize(), this._ctx.clearRect(e13.min.x, e13.min.y, t9.x, t9.y)) : (this._ctx.save(), this._ctx.setTransform(1, 0, 0, 1, 0, 0), this._ctx.clearRect(0, 0, this._container.width, this._container.height), this._ctx.restore());
         },
         _draw: function() {
-            var t7, i9, e12 = this._redrawBounds;
-            this._ctx.save(), e12 && (i9 = e12.getSize(), this._ctx.beginPath(), this._ctx.rect(e12.min.x, e12.min.y, i9.x, i9.y), this._ctx.clip()), this._drawing = !0;
-            for(var n12 = this._drawFirst; n12; n12 = n12.next)t7 = n12.layer, (!e12 || t7._pxBounds && t7._pxBounds.intersects(e12)) && t7._updatePath();
+            var t9, e13, i20 = this._redrawBounds;
+            this._ctx.save(), i20 && (e13 = i20.getSize(), this._ctx.beginPath(), this._ctx.rect(i20.min.x, i20.min.y, e13.x, e13.y), this._ctx.clip()), this._drawing = !0;
+            for(var n18 = this._drawFirst; n18; n18 = n18.next)t9 = n18.layer, (!i20 || t9._pxBounds && t9._pxBounds.intersects(i20)) && t9._updatePath();
             this._drawing = !1, this._ctx.restore();
         },
-        _updatePoly: function(t7, i9) {
+        _updatePoly: function(t9, e13) {
             if (this._drawing) {
-                var e12, n12, o11, s9, r9 = t7._parts, a7 = r9.length, h4 = this._ctx;
-                if (a7) {
-                    for(h4.beginPath(), e12 = 0; e12 < a7; e12++){
-                        for(n12 = 0, o11 = r9[e12].length; n12 < o11; n12++)s9 = r9[e12][n12], h4[n12 ? "lineTo" : "moveTo"](s9.x, s9.y);
-                        i9 && h4.closePath();
+                var i20, n18, o14, s10, r11 = t9._parts, a6 = r11.length, h5 = this._ctx;
+                if (a6) {
+                    for(h5.beginPath(), i20 = 0; i20 < a6; i20++){
+                        for(n18 = 0, o14 = r11[i20].length; n18 < o14; n18++)s10 = r11[i20][n18], h5[n18 ? "lineTo" : "moveTo"](s10.x, s10.y);
+                        e13 && h5.closePath();
                     }
-                    this._fillStroke(h4, t7);
+                    this._fillStroke(h5, t9);
                 }
             }
         },
-        _updateCircle: function(t7) {
-            var i9, e13, n13, o12;
-            this._drawing && !t7._empty() && (i9 = t7._point, e13 = this._ctx, n13 = Math.max(Math.round(t7._radius), 1), 1 != (o12 = (Math.max(Math.round(t7._radiusY), 1) || n13) / n13) && (e13.save(), e13.scale(1, o12)), e13.beginPath(), e13.arc(i9.x, i9.y / o12, n13, 0, 2 * Math.PI, !1), 1 != o12 && e13.restore(), this._fillStroke(e13, t7));
+        _updateCircle: function(t9) {
+            var e13, i21, n19, o15;
+            this._drawing && !t9._empty() && (e13 = t9._point, i21 = this._ctx, n19 = Math.max(Math.round(t9._radius), 1), 1 != (o15 = (Math.max(Math.round(t9._radiusY), 1) || n19) / n19) && (i21.save(), i21.scale(1, o15)), i21.beginPath(), i21.arc(e13.x, e13.y / o15, n19, 0, 2 * Math.PI, !1), 1 != o15 && i21.restore(), this._fillStroke(i21, t9));
         },
-        _fillStroke: function(t7, i9) {
-            var e13 = i9.options;
-            e13.fill && (t7.globalAlpha = e13.fillOpacity, t7.fillStyle = e13.fillColor || e13.color, t7.fill(e13.fillRule || "evenodd")), e13.stroke && 0 !== e13.weight && (t7.setLineDash && t7.setLineDash(i9.options && i9.options._dashArray || []), t7.globalAlpha = e13.opacity, t7.lineWidth = e13.weight, t7.strokeStyle = e13.color, t7.lineCap = e13.lineCap, t7.lineJoin = e13.lineJoin, t7.stroke());
+        _fillStroke: function(t9, e13) {
+            var i21 = e13.options;
+            i21.fill && (t9.globalAlpha = i21.fillOpacity, t9.fillStyle = i21.fillColor || i21.color, t9.fill(i21.fillRule || "evenodd")), i21.stroke && 0 !== i21.weight && (t9.setLineDash && t9.setLineDash(e13.options && e13.options._dashArray || []), t9.globalAlpha = i21.opacity, t9.lineWidth = i21.weight, t9.strokeStyle = i21.color, t9.lineCap = i21.lineCap, t9.lineJoin = i21.lineJoin, t9.stroke());
         },
-        _onClick: function(t7) {
-            for(var i9, e13, n13 = this._map.mouseEventToLayerPoint(t7), o12 = this._drawFirst; o12; o12 = o12.next)(i9 = o12.layer).options.interactive && i9._containsPoint(n13) && (("click" === t7.type || "preclick" !== t7.type) && this._map._draggableMoved(i9) || (e13 = i9));
-            e13 && (Fi(t7), this._fireEvent([
+        _onClick: function(t9) {
+            for(var e13, i21, n19 = this._map.mouseEventToLayerPoint(t9), o15 = this._drawFirst; o15; o15 = o15.next)(e13 = o15.layer).options.interactive && e13._containsPoint(n19) && (("click" === t9.type || "preclick" === t9.type) && this._map._draggableMoved(e13) || (i21 = e13));
+            this._fireEvent(!!i21 && [
+                i21
+            ], t9);
+        },
+        _onMouseMove: function(t9) {
+            var e13;
+            !this._map || this._map.dragging.moving() || this._map._animatingZoom || (e13 = this._map.mouseEventToLayerPoint(t9), this._handleMouseHover(t9, e13));
+        },
+        _handleMouseOut: function(t9) {
+            var e13 = this._hoveredLayer;
+            e13 && (z(this._container, "leaflet-interactive"), this._fireEvent([
                 e13
-            ], t7));
+            ], t9, "mouseout"), this._hoveredLayer = null, this._mouseHoverThrottled = !1);
         },
-        _onMouseMove: function(t7) {
-            var i9;
-            !this._map || this._map.dragging.moving() || this._map._animatingZoom || (i9 = this._map.mouseEventToLayerPoint(t7), this._handleMouseHover(t7, i9));
-        },
-        _handleMouseOut: function(t7) {
-            var i9 = this._hoveredLayer;
-            i9 && (_i(this._container, "leaflet-interactive"), this._fireEvent([
-                i9
-            ], t7, "mouseout"), this._hoveredLayer = null, this._mouseHoverThrottled = !1);
-        },
-        _handleMouseHover: function(t7, i9) {
+        _handleMouseHover: function(t9, e13) {
             if (!this._mouseHoverThrottled) {
-                for(var e13, n13, o12 = this._drawFirst; o12; o12 = o12.next)(e13 = o12.layer).options.interactive && e13._containsPoint(i9) && (n13 = e13);
-                n13 !== this._hoveredLayer && (this._handleMouseOut(t7), n13 && (ci(this._container, "leaflet-interactive"), this._fireEvent([
-                    n13
-                ], t7, "mouseover"), this._hoveredLayer = n13)), this._hoveredLayer && this._fireEvent([
+                for(var i21, n19, o15 = this._drawFirst; o15; o15 = o15.next)(i21 = o15.layer).options.interactive && i21._containsPoint(e13) && (n19 = i21);
+                n19 !== this._hoveredLayer && (this._handleMouseOut(t9), n19 && (M(this._container, "leaflet-interactive"), this._fireEvent([
+                    n19
+                ], t9, "mouseover"), this._hoveredLayer = n19)), this._fireEvent(!!this._hoveredLayer && [
                     this._hoveredLayer
-                ], t7), this._mouseHoverThrottled = !0, setTimeout(p(function() {
+                ], t9), this._mouseHoverThrottled = !0, setTimeout(a2(function() {
                     this._mouseHoverThrottled = !1;
                 }, this), 32);
             }
         },
-        _fireEvent: function(t7, i9, e14) {
-            this._map._fireDOMEvent(i9, e14 || i9.type, t7);
+        _fireEvent: function(t9, e13, i22) {
+            this._map._fireDOMEvent(e13, i22 || e13.type, t9);
         },
-        _bringToFront: function(t7) {
-            var i9, e14, n14 = t7._order;
-            n14 && (i9 = n14.next, e14 = n14.prev, i9 && ((i9.prev = e14) ? e14.next = i9 : i9 && (this._drawFirst = i9), n14.prev = this._drawLast, (this._drawLast.next = n14).next = null, this._drawLast = n14, this._requestRedraw(t7)));
+        _bringToFront: function(t9) {
+            var e13, i22, n20 = t9._order;
+            n20 && (e13 = n20.next, i22 = n20.prev, e13 && ((e13.prev = i22) ? i22.next = e13 : e13 && (this._drawFirst = e13), n20.prev = this._drawLast, (this._drawLast.next = n20).next = null, this._drawLast = n20, this._requestRedraw(t9)));
         },
-        _bringToBack: function(t7) {
-            var i9, e14, n14 = t7._order;
-            n14 && (i9 = n14.next, (e14 = n14.prev) && ((e14.next = i9) ? i9.prev = e14 : e14 && (this._drawLast = e14), n14.prev = null, n14.next = this._drawFirst, this._drawFirst.prev = n14, this._drawFirst = n14, this._requestRedraw(t7)));
+        _bringToBack: function(t9) {
+            var e13, i22, n20 = t9._order;
+            n20 && (e13 = n20.next, (i22 = n20.prev) && ((i22.next = e13) ? e13.prev = i22 : i22 && (this._drawLast = i22), n20.prev = null, n20.next = this._drawFirst, this._drawFirst.prev = n20, this._drawFirst = n20, this._requestRedraw(t9)));
         }
     });
-    function ln(t7) {
-        return St ? new un(t7) : null;
+    function Ui(t9) {
+        return b.canvas ? new Fi(t9) : null;
     }
-    var cn = function() {
+    var Vi = function() {
         try {
-            return document.namespaces.add("lvml", "urn:schemas-microsoft-com:vml"), function(t7) {
-                return document.createElement("<lvml:" + t7 + ' class="lvml">');
+            return document.namespaces.add("lvml", "urn:schemas-microsoft-com:vml"), function(t9) {
+                return document.createElement("<lvml:" + t9 + ' class="lvml">');
             };
-        } catch (t7) {
-            return function(t8) {
-                return document.createElement("<" + t8 + ' xmlns="urn:schemas-microsoft.com:vml" class="lvml">');
-            };
+        } catch (t9) {
         }
-    }(), _n = {
+        return function(t9) {
+            return document.createElement("<" + t9 + ' xmlns="urn:schemas-microsoft.com:vml" class="lvml">');
+        };
+    }(), zt = {
         _initContainer: function() {
-            this._container = si("div", "leaflet-vml-container");
+            this._container = P("div", "leaflet-vml-container");
         },
         _update: function() {
-            this._map._animatingZoom || (hn.prototype._update.call(this), this.fire("update"));
+            this._map._animatingZoom || (Wi.prototype._update.call(this), this.fire("update"));
         },
-        _initPath: function(t7) {
-            var i9 = t7._container = cn("shape");
-            ci(i9, "leaflet-vml-shape " + (this.options.className || "")), i9.coordsize = "1 1", t7._path = cn("path"), i9.appendChild(t7._path), this._updateStyle(t7), this._layers[m(t7)] = t7;
+        _initPath: function(t9) {
+            var e13 = t9._container = Vi("shape");
+            M(e13, "leaflet-vml-shape " + (this.options.className || "")), e13.coordsize = "1 1", t9._path = Vi("path"), e13.appendChild(t9._path), this._updateStyle(t9), this._layers[h(t9)] = t9;
         },
-        _addPath: function(t7) {
-            var i9 = t7._container;
-            this._container.appendChild(i9), t7.options.interactive && t7.addInteractiveTarget(i9);
+        _addPath: function(t9) {
+            var e13 = t9._container;
+            this._container.appendChild(e13), t9.options.interactive && t9.addInteractiveTarget(e13);
         },
-        _removePath: function(t7) {
-            var i9 = t7._container;
-            ri(i9), t7.removeInteractiveTarget(i9), delete this._layers[m(t7)];
+        _removePath: function(t9) {
+            var e13 = t9._container;
+            T(e13), t9.removeInteractiveTarget(e13), delete this._layers[h(t9)];
         },
-        _updateStyle: function(t7) {
-            var i9 = t7._stroke, e14 = t7._fill, n14 = t7.options, o13 = t7._container;
-            o13.stroked = !!n14.stroke, o13.filled = !!n14.fill, n14.stroke ? (i9 = i9 || (t7._stroke = cn("stroke")), o13.appendChild(i9), i9.weight = n14.weight + "px", i9.color = n14.color, i9.opacity = n14.opacity, n14.dashArray ? i9.dashStyle = g(n14.dashArray) ? n14.dashArray.join(" ") : n14.dashArray.replace(/( *, *)/g, " ") : i9.dashStyle = "", i9.endcap = n14.lineCap.replace("butt", "flat"), i9.joinstyle = n14.lineJoin) : i9 && (o13.removeChild(i9), t7._stroke = null), n14.fill ? (e14 = e14 || (t7._fill = cn("fill")), o13.appendChild(e14), e14.color = n14.fillColor || n14.color, e14.opacity = n14.fillOpacity) : e14 && (o13.removeChild(e14), t7._fill = null);
+        _updateStyle: function(t9) {
+            var e13 = t9._stroke, i22 = t9._fill, n20 = t9.options, o16 = t9._container;
+            o16.stroked = !!n20.stroke, o16.filled = !!n20.fill, n20.stroke ? (e13 = e13 || (t9._stroke = Vi("stroke")), o16.appendChild(e13), e13.weight = n20.weight + "px", e13.color = n20.color, e13.opacity = n20.opacity, n20.dashArray ? e13.dashStyle = d(n20.dashArray) ? n20.dashArray.join(" ") : n20.dashArray.replace(/( *, *)/g, " ") : e13.dashStyle = "", e13.endcap = n20.lineCap.replace("butt", "flat"), e13.joinstyle = n20.lineJoin) : e13 && (o16.removeChild(e13), t9._stroke = null), n20.fill ? (i22 = i22 || (t9._fill = Vi("fill")), o16.appendChild(i22), i22.color = n20.fillColor || n20.color, i22.opacity = n20.fillOpacity) : i22 && (o16.removeChild(i22), t9._fill = null);
         },
-        _updateCircle: function(t7) {
-            var i9 = t7._point.round(), e14 = Math.round(t7._radius), n14 = Math.round(t7._radiusY || e14);
-            this._setPath(t7, t7._empty() ? "M0 0" : "AL " + i9.x + "," + i9.y + " " + e14 + "," + n14 + " 0,23592600");
+        _updateCircle: function(t9) {
+            var e13 = t9._point.round(), i22 = Math.round(t9._radius), n20 = Math.round(t9._radiusY || i22);
+            this._setPath(t9, t9._empty() ? "M0 0" : "AL " + e13.x + "," + e13.y + " " + i22 + "," + n20 + " 0,23592600");
         },
-        _setPath: function(t7, i9) {
-            t7._path.v = i9;
+        _setPath: function(t9, e13) {
+            t9._path.v = e13;
         },
-        _bringToFront: function(t7) {
-            hi(t7._container);
+        _bringToFront: function(t9) {
+            fe(t9._container);
         },
-        _bringToBack: function(t7) {
-            ui(t7._container);
+        _bringToBack: function(t9) {
+            ge(t9._container);
         }
-    }, dn = Et ? cn : J, pn = hn.extend({
-        getEvents: function() {
-            var t7 = hn.prototype.getEvents.call(this);
-            return t7.zoomstart = this._onZoomStart, t7;
-        },
+    }, qi = b.vml ? Vi : ct, Gi = Wi.extend({
         _initContainer: function() {
-            this._container = dn("svg"), this._container.setAttribute("pointer-events", "none"), this._rootGroup = dn("g"), this._container.appendChild(this._rootGroup);
+            this._container = qi("svg"), this._container.setAttribute("pointer-events", "none"), this._rootGroup = qi("g"), this._container.appendChild(this._rootGroup);
         },
         _destroyContainer: function() {
-            ri(this._container), Si(this._container), delete this._container, delete this._rootGroup, delete this._svgSize;
-        },
-        _onZoomStart: function() {
-            this._update();
+            T(this._container), k(this._container), delete this._container, delete this._rootGroup, delete this._svgSize;
         },
         _update: function() {
-            var t7, i9, e14;
-            this._map._animatingZoom && this._bounds || (hn.prototype._update.call(this), i9 = (t7 = this._bounds).getSize(), e14 = this._container, this._svgSize && this._svgSize.equals(i9) || (this._svgSize = i9, e14.setAttribute("width", i9.x), e14.setAttribute("height", i9.y)), vi(e14, t7.min), e14.setAttribute("viewBox", [
-                t7.min.x,
-                t7.min.y,
-                i9.x,
-                i9.y
+            var t9, e13, i22;
+            this._map._animatingZoom && this._bounds || (Wi.prototype._update.call(this), e13 = (t9 = this._bounds).getSize(), i22 = this._container, this._svgSize && this._svgSize.equals(e13) || (this._svgSize = e13, i22.setAttribute("width", e13.x), i22.setAttribute("height", e13.y)), Z(i22, t9.min), i22.setAttribute("viewBox", [
+                t9.min.x,
+                t9.min.y,
+                e13.x,
+                e13.y
             ].join(" ")), this.fire("update"));
         },
-        _initPath: function(t7) {
-            var i9 = t7._path = dn("path");
-            t7.options.className && ci(i9, t7.options.className), t7.options.interactive && ci(i9, "leaflet-interactive"), this._updateStyle(t7), this._layers[m(t7)] = t7;
+        _initPath: function(t9) {
+            var e13 = t9._path = qi("path");
+            t9.options.className && M(e13, t9.options.className), t9.options.interactive && M(e13, "leaflet-interactive"), this._updateStyle(t9), this._layers[h(t9)] = t9;
         },
-        _addPath: function(t7) {
-            this._rootGroup || this._initContainer(), this._rootGroup.appendChild(t7._path), t7.addInteractiveTarget(t7._path);
+        _addPath: function(t9) {
+            this._rootGroup || this._initContainer(), this._rootGroup.appendChild(t9._path), t9.addInteractiveTarget(t9._path);
         },
-        _removePath: function(t7) {
-            ri(t7._path), t7.removeInteractiveTarget(t7._path), delete this._layers[m(t7)];
+        _removePath: function(t9) {
+            T(t9._path), t9.removeInteractiveTarget(t9._path), delete this._layers[h(t9)];
         },
-        _updatePath: function(t7) {
-            t7._project(), t7._update();
+        _updatePath: function(t9) {
+            t9._project(), t9._update();
         },
-        _updateStyle: function(t7) {
-            var i9 = t7._path, e14 = t7.options;
-            i9 && (e14.stroke ? (i9.setAttribute("stroke", e14.color), i9.setAttribute("stroke-opacity", e14.opacity), i9.setAttribute("stroke-width", e14.weight), i9.setAttribute("stroke-linecap", e14.lineCap), i9.setAttribute("stroke-linejoin", e14.lineJoin), e14.dashArray ? i9.setAttribute("stroke-dasharray", e14.dashArray) : i9.removeAttribute("stroke-dasharray"), e14.dashOffset ? i9.setAttribute("stroke-dashoffset", e14.dashOffset) : i9.removeAttribute("stroke-dashoffset")) : i9.setAttribute("stroke", "none"), e14.fill ? (i9.setAttribute("fill", e14.fillColor || e14.color), i9.setAttribute("fill-opacity", e14.fillOpacity), i9.setAttribute("fill-rule", e14.fillRule || "evenodd")) : i9.setAttribute("fill", "none"));
+        _updateStyle: function(t9) {
+            var e13 = t9._path, t9 = t9.options;
+            e13 && (t9.stroke ? (e13.setAttribute("stroke", t9.color), e13.setAttribute("stroke-opacity", t9.opacity), e13.setAttribute("stroke-width", t9.weight), e13.setAttribute("stroke-linecap", t9.lineCap), e13.setAttribute("stroke-linejoin", t9.lineJoin), t9.dashArray ? e13.setAttribute("stroke-dasharray", t9.dashArray) : e13.removeAttribute("stroke-dasharray"), t9.dashOffset ? e13.setAttribute("stroke-dashoffset", t9.dashOffset) : e13.removeAttribute("stroke-dashoffset")) : e13.setAttribute("stroke", "none"), t9.fill ? (e13.setAttribute("fill", t9.fillColor || t9.color), e13.setAttribute("fill-opacity", t9.fillOpacity), e13.setAttribute("fill-rule", t9.fillRule || "evenodd")) : e13.setAttribute("fill", "none"));
         },
-        _updatePoly: function(t7, i9) {
-            this._setPath(t7, $(t7._parts, i9));
+        _updatePoly: function(t9, e13) {
+            this._setPath(t9, dt(t9._parts, e13));
         },
-        _updateCircle: function(t7) {
-            var i9 = t7._point, e14 = Math.max(Math.round(t7._radius), 1), n14 = "a" + e14 + "," + (Math.max(Math.round(t7._radiusY), 1) || e14) + " 0 1,0 ", o13 = t7._empty() ? "M0 0" : "M" + (i9.x - e14) + "," + i9.y + n14 + 2 * e14 + ",0 " + n14 + 2 * -e14 + ",0 ";
-            this._setPath(t7, o13);
+        _updateCircle: function(t9) {
+            var e13 = t9._point, i22 = Math.max(Math.round(t9._radius), 1), n20 = "a" + i22 + "," + (Math.max(Math.round(t9._radiusY), 1) || i22) + " 0 1,0 ", e13 = t9._empty() ? "M0 0" : "M" + (e13.x - i22) + "," + e13.y + n20 + 2 * i22 + ",0 " + n20 + 2 * -i22 + ",0 ";
+            this._setPath(t9, e13);
         },
-        _setPath: function(t7, i9) {
-            t7._path.setAttribute("d", i9);
+        _setPath: function(t9, e13) {
+            t9._path.setAttribute("d", e13);
         },
-        _bringToFront: function(t7) {
-            hi(t7._path);
+        _bringToFront: function(t9) {
+            fe(t9._path);
         },
-        _bringToBack: function(t7) {
-            ui(t7._path);
+        _bringToBack: function(t9) {
+            ge(t9._path);
         }
     });
-    function mn(t7) {
-        return Zt || Et ? new pn(t7) : null;
+    function Ki(t9) {
+        return b.svg || b.vml ? new Gi(t9) : null;
     }
-    Et && pn.include(_n), Ki.include({
-        getRenderer: function(t7) {
-            var i9 = (i9 = t7.options.renderer || this._getPaneRenderer(t7.options.pane) || this.options.renderer || this._renderer) || (this._renderer = this._createRenderer());
-            return this.hasLayer(i9) || this.addLayer(i9), i9;
+    b.vml && Gi.include(zt), A.include({
+        getRenderer: function(t9) {
+            t9 = (t9 = t9.options.renderer || this._getPaneRenderer(t9.options.pane) || this.options.renderer || this._renderer) || (this._renderer = this._createRenderer());
+            return this.hasLayer(t9) || this.addLayer(t9), t9;
         },
-        _getPaneRenderer: function(t7) {
-            if ("overlayPane" === t7 || (void 0) === t7) return !1;
-            var i9 = this._paneRenderers[t7];
-            return (void 0) === i9 && (i9 = this._createRenderer({
-                pane: t7
-            }), this._paneRenderers[t7] = i9), i9;
+        _getPaneRenderer: function(t9) {
+            var e13;
+            return "overlayPane" !== t9 && (void 0) !== t9 && ((void 0) === (e13 = this._paneRenderers[t9]) && (e13 = this._createRenderer({
+                pane: t9
+            }), this._paneRenderers[t9] = e13), e13);
         },
-        _createRenderer: function(t7) {
-            return this.options.preferCanvas && ln(t7) || mn(t7);
+        _createRenderer: function(t9) {
+            return this.options.preferCanvas && Ui(t9) || Ki(t9);
         }
     });
-    var fn = Re.extend({
-        initialize: function(t7, i9) {
-            Re.prototype.initialize.call(this, this._boundsToLatLngs(t7), i9);
+    var Yi = xi.extend({
+        initialize: function(t9, e13) {
+            xi.prototype.initialize.call(this, this._boundsToLatLngs(t9), e13);
         },
-        setBounds: function(t7) {
-            return this.setLatLngs(this._boundsToLatLngs(t7));
+        setBounds: function(t9) {
+            return this.setLatLngs(this._boundsToLatLngs(t9));
         },
-        _boundsToLatLngs: function(t7) {
+        _boundsToLatLngs: function(t9) {
             return [
-                (t7 = N(t7)).getSouthWest(),
-                t7.getNorthWest(),
-                t7.getNorthEast(),
-                t7.getSouthEast()
+                (t9 = g(t9)).getSouthWest(),
+                t9.getNorthWest(),
+                t9.getNorthEast(),
+                t9.getSouthEast()
             ];
         }
     });
-    pn.create = dn, pn.pointsToPath = $, Ne.geometryToLayer = De, Ne.coordsToLatLng = We, Ne.coordsToLatLngs = He, Ne.latLngToCoords = Fe, Ne.latLngsToCoords = Ue, Ne.getFeature = Ve, Ne.asFeature = qe, Ki.mergeOptions({
+    Gi.create = qi, Gi.pointsToPath = dt, wi.geometryToLayer = bi, wi.coordsToLatLng = Li, wi.coordsToLatLngs = Ti, wi.latLngToCoords = Mi, wi.latLngsToCoords = zi, wi.getFeature = Ci, wi.asFeature = Zi, A.mergeOptions({
         boxZoom: !0
     });
-    var gn = ie.extend({
-        initialize: function(t7) {
-            this._map = t7, this._container = t7._container, this._pane = t7._panes.overlayPane, this._resetStateTimeout = 0, t7.on("unload", this._destroy, this);
+    var _t = n7.extend({
+        initialize: function(t9) {
+            this._map = t9, this._container = t9._container, this._pane = t9._panes.overlayPane, this._resetStateTimeout = 0, t9.on("unload", this._destroy, this);
         },
         addHooks: function() {
-            zi(this._container, "mousedown", this._onMouseDown, this);
+            S(this._container, "mousedown", this._onMouseDown, this);
         },
         removeHooks: function() {
-            Si(this._container, "mousedown", this._onMouseDown, this);
+            k(this._container, "mousedown", this._onMouseDown, this);
         },
         moved: function() {
             return this._moved;
         },
         _destroy: function() {
-            ri(this._pane), delete this._pane;
+            T(this._pane), delete this._pane;
         },
         _resetState: function() {
             this._resetStateTimeout = 0, this._moved = !1;
@@ -4838,73 +4953,68 @@ function fitBoundsPadding(e) {
         _clearDeferredResetState: function() {
             0 !== this._resetStateTimeout && (clearTimeout(this._resetStateTimeout), this._resetStateTimeout = 0);
         },
-        _onMouseDown: function(t7) {
-            if (!t7.shiftKey || 1 !== t7.which && 1 !== t7.button) return !1;
-            this._clearDeferredResetState(), this._resetState(), Xt(), xi(), this._startPoint = this._map.mouseEventToContainerPoint(t7), zi(document, {
-                contextmenu: Ni,
+        _onMouseDown: function(t9) {
+            if (!t9.shiftKey || 1 !== t9.which && 1 !== t9.button) return !1;
+            this._clearDeferredResetState(), this._resetState(), re(), Le(), this._startPoint = this._map.mouseEventToContainerPoint(t9), S(document, {
+                contextmenu: Re,
                 mousemove: this._onMouseMove,
                 mouseup: this._onMouseUp,
                 keydown: this._onKeyDown
             }, this);
         },
-        _onMouseMove: function(t7) {
-            this._moved || (this._moved = !0, this._box = si("div", "leaflet-zoom-box", this._container), ci(this._container, "leaflet-crosshair"), this._map.fire("boxzoomstart")), this._point = this._map.mouseEventToContainerPoint(t7);
-            var i9 = new I(this._point, this._startPoint), e14 = i9.getSize();
-            vi(this._box, i9.min), this._box.style.width = e14.x + "px", this._box.style.height = e14.y + "px";
+        _onMouseMove: function(t9) {
+            this._moved || (this._moved = !0, this._box = P("div", "leaflet-zoom-box", this._container), M(this._container, "leaflet-crosshair"), this._map.fire("boxzoomstart")), this._point = this._map.mouseEventToContainerPoint(t9);
+            var t9 = new f(this._point, this._startPoint), e13 = t9.getSize();
+            Z(this._box, t9.min), this._box.style.width = e13.x + "px", this._box.style.height = e13.y + "px";
         },
         _finish: function() {
-            this._moved && (ri(this._box), _i(this._container, "leaflet-crosshair")), Jt(), wi(), Si(document, {
-                contextmenu: Ni,
+            this._moved && (T(this._box), z(this._container, "leaflet-crosshair")), ae(), Te(), k(document, {
+                contextmenu: Re,
                 mousemove: this._onMouseMove,
                 mouseup: this._onMouseUp,
                 keydown: this._onKeyDown
             }, this);
         },
-        _onMouseUp: function(t7) {
-            var i9;
-            1 !== t7.which && 1 !== t7.button || (this._finish(), this._moved && (this._clearDeferredResetState(), this._resetStateTimeout = setTimeout(p(this._resetState, this), 0), i9 = new R(this._map.containerPointToLatLng(this._startPoint), this._map.containerPointToLatLng(this._point)), this._map.fitBounds(i9).fire("boxzoomend", {
-                boxZoomBounds: i9
+        _onMouseUp: function(t9) {
+            1 !== t9.which && 1 !== t9.button || (this._finish(), this._moved && (this._clearDeferredResetState(), this._resetStateTimeout = setTimeout(a2(this._resetState, this), 0), t9 = new s(this._map.containerPointToLatLng(this._startPoint), this._map.containerPointToLatLng(this._point)), this._map.fitBounds(t9).fire("boxzoomend", {
+                boxZoomBounds: t9
             })));
         },
-        _onKeyDown: function(t7) {
-            27 === t7.keyCode && this._finish();
+        _onKeyDown: function(t9) {
+            27 === t9.keyCode && (this._finish(), this._clearDeferredResetState(), this._resetState());
         }
-    });
-    Ki.addInitHook("addHandler", "boxZoom", gn), Ki.mergeOptions({
+    }), Ct = (A.addInitHook("addHandler", "boxZoom", _t), A.mergeOptions({
         doubleClickZoom: !0
-    });
-    var vn = ie.extend({
+    }), n7.extend({
         addHooks: function() {
             this._map.on("dblclick", this._onDoubleClick, this);
         },
         removeHooks: function() {
             this._map.off("dblclick", this._onDoubleClick, this);
         },
-        _onDoubleClick: function(t7) {
-            var i9 = this._map, e14 = i9.getZoom(), n14 = i9.options.zoomDelta, o13 = t7.originalEvent.shiftKey ? e14 - n14 : e14 + n14;
-            "center" === i9.options.doubleClickZoom ? i9.setZoom(o13) : i9.setZoomAround(t7.containerPoint, o13);
+        _onDoubleClick: function(t9) {
+            var e13 = this._map, i22 = e13.getZoom(), n20 = e13.options.zoomDelta, i22 = t9.originalEvent.shiftKey ? i22 - n20 : i22 + n20;
+            "center" === e13.options.doubleClickZoom ? e13.setZoom(i22) : e13.setZoomAround(t9.containerPoint, i22);
         }
-    });
-    Ki.addInitHook("addHandler", "doubleClickZoom", vn), Ki.mergeOptions({
+    })), Zt = (A.addInitHook("addHandler", "doubleClickZoom", Ct), A.mergeOptions({
         dragging: !0,
-        inertia: !st,
+        inertia: !0,
         inertiaDeceleration: 3400,
         inertiaMaxSpeed: 1 / 0,
         easeLinearity: 0.2,
         worldCopyJump: !1,
         maxBoundsViscosity: 0
-    });
-    var yn = ie.extend({
+    }), n7.extend({
         addHooks: function() {
-            var t7;
-            this._draggable || (t7 = this._map, this._draggable = new ae(t7._mapPane, t7._container), this._draggable.on({
+            var t9;
+            this._draggable || (t9 = this._map, this._draggable = new Xe(t9._mapPane, t9._container), this._draggable.on({
                 dragstart: this._onDragStart,
                 drag: this._onDrag,
                 dragend: this._onDragEnd
-            }, this), this._draggable.on("predrag", this._onPreDragLimit, this), t7.options.worldCopyJump && (this._draggable.on("predrag", this._onPreDragWrap, this), t7.on("zoomend", this._onZoomEnd, this), t7.whenReady(this._onZoomEnd, this))), ci(this._map._container, "leaflet-grab leaflet-touch-drag"), this._draggable.enable(), this._positions = [], this._times = [];
+            }, this), this._draggable.on("predrag", this._onPreDragLimit, this), t9.options.worldCopyJump && (this._draggable.on("predrag", this._onPreDragWrap, this), t9.on("zoomend", this._onZoomEnd, this), t9.whenReady(this._onZoomEnd, this))), M(this._map._container, "leaflet-grab leaflet-touch-drag"), this._draggable.enable(), this._positions = [], this._times = [];
         },
         removeHooks: function() {
-            _i(this._map._container, "leaflet-grab"), _i(this._map._container, "leaflet-touch-drag"), this._draggable.disable();
+            z(this._map._container, "leaflet-grab"), z(this._map._container, "leaflet-touch-drag"), this._draggable.disable();
         },
         moved: function() {
             return this._draggable && this._draggable._moved;
@@ -4913,54 +5023,52 @@ function fitBoundsPadding(e) {
             return this._draggable && this._draggable._moving;
         },
         _onDragStart: function() {
-            var t7, i9 = this._map;
-            i9._stop(), this._map.options.maxBounds && this._map.options.maxBoundsViscosity ? (t7 = N(this._map.options.maxBounds), this._offsetLimit = O(this._map.latLngToContainerPoint(t7.getNorthWest()).multiplyBy(-1), this._map.latLngToContainerPoint(t7.getSouthEast()).multiplyBy(-1).add(this._map.getSize())), this._viscosity = Math.min(1, Math.max(0, this._map.options.maxBoundsViscosity))) : this._offsetLimit = null, i9.fire("movestart").fire("dragstart"), i9.options.inertia && (this._positions = [], this._times = []);
+            var t9, e13 = this._map;
+            e13._stop(), this._map.options.maxBounds && this._map.options.maxBoundsViscosity ? (t9 = g(this._map.options.maxBounds), this._offsetLimit = _(this._map.latLngToContainerPoint(t9.getNorthWest()).multiplyBy(-1), this._map.latLngToContainerPoint(t9.getSouthEast()).multiplyBy(-1).add(this._map.getSize())), this._viscosity = Math.min(1, Math.max(0, this._map.options.maxBoundsViscosity))) : this._offsetLimit = null, e13.fire("movestart").fire("dragstart"), e13.options.inertia && (this._positions = [], this._times = []);
         },
-        _onDrag: function(t7) {
-            var i9, e14;
-            this._map.options.inertia && (i9 = this._lastTime = +new Date, e14 = this._lastPos = this._draggable._absPos || this._draggable._newPos, this._positions.push(e14), this._times.push(i9), this._prunePositions(i9)), this._map.fire("move", t7).fire("drag", t7);
+        _onDrag: function(t9) {
+            var e13, i22;
+            this._map.options.inertia && (e13 = this._lastTime = +new Date, i22 = this._lastPos = this._draggable._absPos || this._draggable._newPos, this._positions.push(i22), this._times.push(e13), this._prunePositions(e13)), this._map.fire("move", t9).fire("drag", t9);
         },
-        _prunePositions: function(t7) {
-            for(; 1 < this._positions.length && 50 < t7 - this._times[0];)this._positions.shift(), this._times.shift();
+        _prunePositions: function(t9) {
+            for(; 1 < this._positions.length && 50 < t9 - this._times[0];)this._positions.shift(), this._times.shift();
         },
         _onZoomEnd: function() {
-            var t7 = this._map.getSize().divideBy(2), i9 = this._map.latLngToLayerPoint([
+            var t9 = this._map.getSize().divideBy(2), e13 = this._map.latLngToLayerPoint([
                 0,
                 0
             ]);
-            this._initialWorldOffset = i9.subtract(t7).x, this._worldWidth = this._map.getPixelWorldBounds().getSize().x;
+            this._initialWorldOffset = e13.subtract(t9).x, this._worldWidth = this._map.getPixelWorldBounds().getSize().x;
         },
-        _viscousLimit: function(t7, i9) {
-            return t7 - (t7 - i9) * this._viscosity;
+        _viscousLimit: function(t9, e13) {
+            return t9 - (t9 - e13) * this._viscosity;
         },
         _onPreDragLimit: function() {
-            var t7, i9;
-            this._viscosity && this._offsetLimit && (t7 = this._draggable._newPos.subtract(this._draggable._startPos), i9 = this._offsetLimit, t7.x < i9.min.x && (t7.x = this._viscousLimit(t7.x, i9.min.x)), t7.y < i9.min.y && (t7.y = this._viscousLimit(t7.y, i9.min.y)), t7.x > i9.max.x && (t7.x = this._viscousLimit(t7.x, i9.max.x)), t7.y > i9.max.y && (t7.y = this._viscousLimit(t7.y, i9.max.y)), this._draggable._newPos = this._draggable._startPos.add(t7));
+            var t9, e13;
+            this._viscosity && this._offsetLimit && (t9 = this._draggable._newPos.subtract(this._draggable._startPos), e13 = this._offsetLimit, t9.x < e13.min.x && (t9.x = this._viscousLimit(t9.x, e13.min.x)), t9.y < e13.min.y && (t9.y = this._viscousLimit(t9.y, e13.min.y)), t9.x > e13.max.x && (t9.x = this._viscousLimit(t9.x, e13.max.x)), t9.y > e13.max.y && (t9.y = this._viscousLimit(t9.y, e13.max.y)), this._draggable._newPos = this._draggable._startPos.add(t9));
         },
         _onPreDragWrap: function() {
-            var t7 = this._worldWidth, i9 = Math.round(t7 / 2), e14 = this._initialWorldOffset, n14 = this._draggable._newPos.x, o13 = (n14 - i9 + e14) % t7 + i9 - e14, s10 = (n14 + i9 + e14) % t7 - i9 - e14, r10 = Math.abs(o13 + e14) < Math.abs(s10 + e14) ? o13 : s10;
-            this._draggable._absPos = this._draggable._newPos.clone(), this._draggable._newPos.x = r10;
+            var t9 = this._worldWidth, e13 = Math.round(t9 / 2), i22 = this._initialWorldOffset, n20 = this._draggable._newPos.x, o16 = (n20 - e13 + i22) % t9 + e13 - i22, n20 = (n20 + e13 + i22) % t9 - e13 - i22, t9 = Math.abs(o16 + i22) < Math.abs(n20 + i22) ? o16 : n20;
+            this._draggable._absPos = this._draggable._newPos.clone(), this._draggable._newPos.x = t9;
         },
-        _onDragEnd: function(t7) {
-            var i9, e14, n14, o13, s10, r10, a8, h5, u2, l2 = this._map, c4 = l2.options, _2 = !c4.inertia || this._times.length < 2;
-            l2.fire("dragend", t7), _2 ? l2.fire("moveend") : (this._prunePositions(+new Date), i9 = this._lastPos.subtract(this._positions[0]), e14 = (this._lastTime - this._times[0]) / 1000, n14 = c4.easeLinearity, s10 = (o13 = i9.multiplyBy(n14 / e14)).distanceTo([
+        _onDragEnd: function(t9) {
+            var e13, i22, n20, o16, s11 = this._map, r12 = s11.options, a7 = !r12.inertia || t9.noInertia || this._times.length < 2;
+            s11.fire("dragend", t9), !a7 && (this._prunePositions(+new Date), t9 = this._lastPos.subtract(this._positions[0]), a7 = (this._lastTime - this._times[0]) / 1000, e13 = r12.easeLinearity, a7 = (t9 = t9.multiplyBy(e13 / a7)).distanceTo([
                 0,
                 0
-            ]), r10 = Math.min(c4.inertiaMaxSpeed, s10), a8 = o13.multiplyBy(r10 / s10), h5 = r10 / (c4.inertiaDeceleration * n14), (u2 = a8.multiplyBy(-h5 / 2).round()).x || u2.y ? (u2 = l2._limitOffset(u2, l2.options.maxBounds), M(function() {
-                l2.panBy(u2, {
-                    duration: h5,
-                    easeLinearity: n14,
+            ]), i22 = Math.min(r12.inertiaMaxSpeed, a7), t9 = t9.multiplyBy(i22 / a7), n20 = i22 / (r12.inertiaDeceleration * e13), (o16 = t9.multiplyBy(-n20 / 2).round()).x || o16.y) ? (o16 = s11._limitOffset(o16, s11.options.maxBounds), x(function() {
+                s11.panBy(o16, {
+                    duration: n20,
+                    easeLinearity: e13,
                     noMoveStart: !0,
                     animate: !0
                 });
-            })) : l2.fire("moveend"));
+            })) : s11.fire("moveend");
         }
-    });
-    Ki.addInitHook("addHandler", "dragging", yn), Ki.mergeOptions({
+    })), St = (A.addInitHook("addHandler", "dragging", Zt), A.mergeOptions({
         keyboard: !0,
         keyboardPanDelta: 80
-    });
-    var xn = ie.extend({
+    }), n7.extend({
         keyCodes: {
             left: [
                 37
@@ -4987,12 +5095,12 @@ function fitBoundsPadding(e) {
                 173
             ]
         },
-        initialize: function(t7) {
-            this._map = t7, this._setPanDelta(t7.options.keyboardPanDelta), this._setZoomDelta(t7.options.zoomDelta);
+        initialize: function(t9) {
+            this._map = t9, this._setPanDelta(t9.options.keyboardPanDelta), this._setZoomDelta(t9.options.zoomDelta);
         },
         addHooks: function() {
-            var t7 = this._map._container;
-            t7.tabIndex <= 0 && (t7.tabIndex = "0"), zi(t7, {
+            var t9 = this._map._container;
+            t9.tabIndex <= 0 && (t9.tabIndex = "0"), S(t9, {
                 focus: this._onFocus,
                 blur: this._onBlur,
                 mousedown: this._onMouseDown
@@ -5002,7 +5110,7 @@ function fitBoundsPadding(e) {
             }, this);
         },
         removeHooks: function() {
-            this._removeHooks(), Si(this._map._container, {
+            this._removeHooks(), k(this._map._container, {
                 focus: this._onFocus,
                 blur: this._onBlur,
                 mousedown: this._onMouseDown
@@ -5012,8 +5120,8 @@ function fitBoundsPadding(e) {
             }, this);
         },
         _onMouseDown: function() {
-            var t7, i9, e14, n14;
-            this._focused || (t7 = document.body, i9 = document.documentElement, e14 = t7.scrollTop || i9.scrollTop, n14 = t7.scrollLeft || i9.scrollLeft, this._map._container.focus(), window.scrollTo(n14, e14));
+            var t9, e13, i22;
+            this._focused || (i22 = document.body, t9 = document.documentElement, e13 = i22.scrollTop || t9.scrollTop, i22 = i22.scrollLeft || t9.scrollLeft, this._map._container.focus(), window.scrollTo(i22, e13));
         },
         _onFocus: function() {
             this._focused = !0, this._map.fire("focus");
@@ -5021,191 +5129,180 @@ function fitBoundsPadding(e) {
         _onBlur: function() {
             this._focused = !1, this._map.fire("blur");
         },
-        _setPanDelta: function(t7) {
-            for(var i9 = this._panKeys = {
-            }, e14 = this.keyCodes, n14 = 0, o13 = e14.left.length; n14 < o13; n14++)i9[e14.left[n14]] = [
-                -1 * t7,
+        _setPanDelta: function(t9) {
+            for(var e13 = this._panKeys = {
+            }, i22 = this.keyCodes, n20 = 0, o16 = i22.left.length; n20 < o16; n20++)e13[i22.left[n20]] = [
+                -1 * t9,
                 0
             ];
-            for(n14 = 0, o13 = e14.right.length; n14 < o13; n14++)i9[e14.right[n14]] = [
-                t7,
+            for(n20 = 0, o16 = i22.right.length; n20 < o16; n20++)e13[i22.right[n20]] = [
+                t9,
                 0
             ];
-            for(n14 = 0, o13 = e14.down.length; n14 < o13; n14++)i9[e14.down[n14]] = [
+            for(n20 = 0, o16 = i22.down.length; n20 < o16; n20++)e13[i22.down[n20]] = [
                 0,
-                t7
+                t9
             ];
-            for(n14 = 0, o13 = e14.up.length; n14 < o13; n14++)i9[e14.up[n14]] = [
+            for(n20 = 0, o16 = i22.up.length; n20 < o16; n20++)e13[i22.up[n20]] = [
                 0,
-                -1 * t7
+                -1 * t9
             ];
         },
-        _setZoomDelta: function(t7) {
-            for(var i9 = this._zoomKeys = {
-            }, e14 = this.keyCodes, n14 = 0, o13 = e14.zoomIn.length; n14 < o13; n14++)i9[e14.zoomIn[n14]] = t7;
-            for(n14 = 0, o13 = e14.zoomOut.length; n14 < o13; n14++)i9[e14.zoomOut[n14]] = -t7;
+        _setZoomDelta: function(t9) {
+            for(var e13 = this._zoomKeys = {
+            }, i22 = this.keyCodes, n20 = 0, o16 = i22.zoomIn.length; n20 < o16; n20++)e13[i22.zoomIn[n20]] = t9;
+            for(n20 = 0, o16 = i22.zoomOut.length; n20 < o16; n20++)e13[i22.zoomOut[n20]] = -t9;
         },
         _addHooks: function() {
-            zi(document, "keydown", this._onKeyDown, this);
+            S(document, "keydown", this._onKeyDown, this);
         },
         _removeHooks: function() {
-            Si(document, "keydown", this._onKeyDown, this);
+            k(document, "keydown", this._onKeyDown, this);
         },
-        _onKeyDown: function(t7) {
-            if (!(t7.altKey || t7.ctrlKey || t7.metaKey)) {
-                var i9, e14 = t7.keyCode, n14 = this._map;
-                if (e14 in this._panKeys) n14._panAnim && n14._panAnim._inProgress || (i9 = this._panKeys[e14], t7.shiftKey && (i9 = A(i9).multiplyBy(3)), n14.panBy(i9), n14.options.maxBounds && n14.panInsideBounds(n14.options.maxBounds));
-                else if (e14 in this._zoomKeys) n14.setZoom(n14.getZoom() + (t7.shiftKey ? 3 : 1) * this._zoomKeys[e14]);
+        _onKeyDown: function(t9) {
+            if (!(t9.altKey || t9.ctrlKey || t9.metaKey)) {
+                var e13, i22, n20 = t9.keyCode, o16 = this._map;
+                if (n20 in this._panKeys) o16._panAnim && o16._panAnim._inProgress || (i22 = this._panKeys[n20], t9.shiftKey && (i22 = m(i22).multiplyBy(3)), o16.options.maxBounds && (i22 = o16._limitOffset(m(i22), o16.options.maxBounds)), o16.options.worldCopyJump ? (e13 = o16.wrapLatLng(o16.unproject(o16.project(o16.getCenter()).add(i22))), o16.panTo(e13)) : o16.panBy(i22));
+                else if (n20 in this._zoomKeys) o16.setZoom(o16.getZoom() + (t9.shiftKey ? 3 : 1) * this._zoomKeys[n20]);
                 else {
-                    if (27 !== e14 || !n14._popup || !n14._popup.options.closeOnEscapeKey) return;
-                    n14.closePopup();
+                    if (27 !== n20 || !o16._popup || !o16._popup.options.closeOnEscapeKey) return;
+                    o16.closePopup();
                 }
-                Ni(t7);
+                Re(t9);
             }
         }
-    });
-    Ki.addInitHook("addHandler", "keyboard", xn), Ki.mergeOptions({
+    })), Et = (A.addInitHook("addHandler", "keyboard", St), A.mergeOptions({
         scrollWheelZoom: !0,
         wheelDebounceTime: 40,
         wheelPxPerZoomLevel: 60
-    });
-    var wn = ie.extend({
+    }), n7.extend({
         addHooks: function() {
-            zi(this._map._container, "wheel", this._onWheelScroll, this), this._delta = 0;
+            S(this._map._container, "wheel", this._onWheelScroll, this), this._delta = 0;
         },
         removeHooks: function() {
-            Si(this._map._container, "wheel", this._onWheelScroll, this);
+            k(this._map._container, "wheel", this._onWheelScroll, this);
         },
-        _onWheelScroll: function(t7) {
-            var i10 = Wi(t7), e15 = this._map.options.wheelDebounceTime;
-            this._delta += i10, this._lastMousePos = this._map.mouseEventToContainerPoint(t7), this._startTime || (this._startTime = +new Date);
-            var n15 = Math.max(e15 - (new Date - this._startTime), 0);
-            clearTimeout(this._timer), this._timer = setTimeout(p(this._performZoom, this), n15), Ni(t7);
+        _onWheelScroll: function(t9) {
+            var e14 = He(t9), i23 = this._map.options.wheelDebounceTime, e14 = (this._delta += e14, this._lastMousePos = this._map.mouseEventToContainerPoint(t9), this._startTime || (this._startTime = +new Date), Math.max(i23 - (+new Date - this._startTime), 0));
+            clearTimeout(this._timer), this._timer = setTimeout(a2(this._performZoom, this), e14), Re(t9);
         },
         _performZoom: function() {
-            var t7 = this._map, i10 = t7.getZoom(), e15 = this._map.options.zoomSnap || 0;
-            t7._stop();
-            var n15 = this._delta / (4 * this._map.options.wheelPxPerZoomLevel), o13 = 4 * Math.log(2 / (1 + Math.exp(-Math.abs(n15)))) / Math.LN2, s10 = e15 ? Math.ceil(o13 / e15) * e15 : o13, r10 = t7._limitZoom(i10 + (0 < this._delta ? s10 : -s10)) - i10;
-            this._delta = 0, this._startTime = null, r10 && ("center" === t7.options.scrollWheelZoom ? t7.setZoom(i10 + r10) : t7.setZoomAround(this._lastMousePos, i10 + r10));
+            var t9 = this._map, e14 = t9.getZoom(), i23 = this._map.options.zoomSnap || 0, n21 = (t9._stop(), this._delta / (4 * this._map.options.wheelPxPerZoomLevel)), n21 = 4 * Math.log(2 / (1 + Math.exp(-Math.abs(n21)))) / Math.LN2, i23 = i23 ? Math.ceil(n21 / i23) * i23 : n21, n21 = t9._limitZoom(e14 + (0 < this._delta ? i23 : -i23)) - e14;
+            this._delta = 0, this._startTime = null, n21 && ("center" === t9.options.scrollWheelZoom ? t9.setZoom(e14 + n21) : t9.setZoomAround(this._lastMousePos, e14 + n21));
         }
-    });
-    Ki.addInitHook("addHandler", "scrollWheelZoom", wn), Ki.mergeOptions({
-        tap: !0,
+    })), kt = (A.addInitHook("addHandler", "scrollWheelZoom", Et), A.mergeOptions({
+        tapHold: b.touchNative && b.safari && b.mobile,
         tapTolerance: 15
-    });
-    var Pn = ie.extend({
+    }), n7.extend({
         addHooks: function() {
-            zi(this._map._container, "touchstart", this._onDown, this);
+            S(this._map._container, "touchstart", this._onDown, this);
         },
         removeHooks: function() {
-            Si(this._map._container, "touchstart", this._onDown, this);
+            k(this._map._container, "touchstart", this._onDown, this);
         },
-        _onDown: function(t7) {
-            if (t7.touches) {
-                if (Ri(t7), this._fireClick = !0, 1 < t7.touches.length) return this._fireClick = !1, void clearTimeout(this._holdTimeout);
-                var i10 = t7.touches[0], e15 = i10.target;
-                this._startPos = this._newPos = new k(i10.clientX, i10.clientY), e15.tagName && "a" === e15.tagName.toLowerCase() && ci(e15, "leaflet-active"), this._holdTimeout = setTimeout(p(function() {
-                    this._isTapValid() && (this._fireClick = !1, this._onUp(), this._simulateEvent("contextmenu", i10));
-                }, this), 1000), this._simulateEvent("mousedown", i10), zi(document, {
-                    touchmove: this._onMove,
-                    touchend: this._onUp
-                }, this);
-            }
+        _onDown: function(t9) {
+            var e14;
+            clearTimeout(this._holdTimeout), 1 === t9.touches.length && (e14 = t9.touches[0], this._startPos = this._newPos = new p(e14.clientX, e14.clientY), this._holdTimeout = setTimeout(a2(function() {
+                this._cancel(), this._isTapValid() && (S(document, "touchend", O), S(document, "touchend touchcancel", this._cancelClickPrevent), this._simulateEvent("contextmenu", e14));
+            }, this), 600), S(document, "touchend touchcancel contextmenu", this._cancel, this), S(document, "touchmove", this._onMove, this));
         },
-        _onUp: function(t7) {
-            var i11, e16;
-            clearTimeout(this._holdTimeout), Si(document, {
-                touchmove: this._onMove,
-                touchend: this._onUp
-            }, this), this._fireClick && t7 && t7.changedTouches && ((e16 = (i11 = t7.changedTouches[0]).target) && e16.tagName && "a" === e16.tagName.toLowerCase() && _i(e16, "leaflet-active"), this._simulateEvent("mouseup", i11), this._isTapValid() && this._simulateEvent("click", i11));
+        _cancelClickPrevent: function t9() {
+            k(document, "touchend", O), k(document, "touchend touchcancel", t9);
+        },
+        _cancel: function() {
+            clearTimeout(this._holdTimeout), k(document, "touchend touchcancel contextmenu", this._cancel, this), k(document, "touchmove", this._onMove, this);
+        },
+        _onMove: function(t10) {
+            t10 = t10.touches[0];
+            this._newPos = new p(t10.clientX, t10.clientY);
         },
         _isTapValid: function() {
             return this._newPos.distanceTo(this._startPos) <= this._map.options.tapTolerance;
         },
-        _onMove: function(t7) {
-            var i11 = t7.touches[0];
-            this._newPos = new k(i11.clientX, i11.clientY), this._simulateEvent("mousemove", i11);
-        },
-        _simulateEvent: function(t7, i11) {
-            var e16 = document.createEvent("MouseEvents");
-            e16._simulated = !0, i11.target._simulatedClick = !0, e16.initMouseEvent(t7, !0, !0, window, 1, i11.screenX, i11.screenY, i11.clientX, i11.clientY, !1, !1, !1, !1, 0, null), i11.target.dispatchEvent(e16);
+        _simulateEvent: function(t10, e14) {
+            t10 = new MouseEvent(t10, {
+                bubbles: !0,
+                cancelable: !0,
+                view: window,
+                screenX: e14.screenX,
+                screenY: e14.screenY,
+                clientX: e14.clientX,
+                clientY: e14.clientY
+            });
+            t10._simulated = !0, e14.target.dispatchEvent(t10);
         }
-    });
-    !bt || Lt && !ct || Ki.addInitHook("addHandler", "tap", Pn), Ki.mergeOptions({
-        touchZoom: bt && !st,
+    })), Ot = (A.addInitHook("addHandler", "tapHold", kt), A.mergeOptions({
+        touchZoom: b.touch,
         bounceAtZoomLimits: !0
-    });
-    var Ln = ie.extend({
+    }), n7.extend({
         addHooks: function() {
-            ci(this._map._container, "leaflet-touch-zoom"), zi(this._map._container, "touchstart", this._onTouchStart, this);
+            M(this._map._container, "leaflet-touch-zoom"), S(this._map._container, "touchstart", this._onTouchStart, this);
         },
         removeHooks: function() {
-            _i(this._map._container, "leaflet-touch-zoom"), Si(this._map._container, "touchstart", this._onTouchStart, this);
+            z(this._map._container, "leaflet-touch-zoom"), k(this._map._container, "touchstart", this._onTouchStart, this);
         },
-        _onTouchStart: function(t7) {
-            var i11, e16, n15 = this._map;
-            !t7.touches || 2 !== t7.touches.length || n15._animatingZoom || this._zooming || (i11 = n15.mouseEventToContainerPoint(t7.touches[0]), e16 = n15.mouseEventToContainerPoint(t7.touches[1]), this._centerPoint = n15.getSize()._divideBy(2), this._startLatLng = n15.containerPointToLatLng(this._centerPoint), "center" !== n15.options.touchZoom && (this._pinchStartLatLng = n15.containerPointToLatLng(i11.add(e16)._divideBy(2))), this._startDist = i11.distanceTo(e16), this._startZoom = n15.getZoom(), this._moved = !1, this._zooming = !0, n15._stop(), zi(document, "touchmove", this._onTouchMove, this), zi(document, "touchend", this._onTouchEnd, this), Ri(t7));
+        _onTouchStart: function(t9) {
+            var e14, i23, n21 = this._map;
+            !t9.touches || 2 !== t9.touches.length || n21._animatingZoom || this._zooming || (e14 = n21.mouseEventToContainerPoint(t9.touches[0]), i23 = n21.mouseEventToContainerPoint(t9.touches[1]), this._centerPoint = n21.getSize()._divideBy(2), this._startLatLng = n21.containerPointToLatLng(this._centerPoint), "center" !== n21.options.touchZoom && (this._pinchStartLatLng = n21.containerPointToLatLng(e14.add(i23)._divideBy(2))), this._startDist = e14.distanceTo(i23), this._startZoom = n21.getZoom(), this._moved = !1, this._zooming = !0, n21._stop(), S(document, "touchmove", this._onTouchMove, this), S(document, "touchend touchcancel", this._onTouchEnd, this), O(t9));
         },
-        _onTouchMove: function(t7) {
-            if (t7.touches && 2 === t7.touches.length && this._zooming) {
-                var i11 = this._map, e16 = i11.mouseEventToContainerPoint(t7.touches[0]), n15 = i11.mouseEventToContainerPoint(t7.touches[1]), o13 = e16.distanceTo(n15) / this._startDist;
-                if (this._zoom = i11.getScaleZoom(o13, this._startZoom), !i11.options.bounceAtZoomLimits && (this._zoom < i11.getMinZoom() && o13 < 1 || this._zoom > i11.getMaxZoom() && 1 < o13) && (this._zoom = i11._limitZoom(this._zoom)), "center" === i11.options.touchZoom) {
-                    if (this._center = this._startLatLng, 1 == o13) return;
+        _onTouchMove: function(t9) {
+            if (t9.touches && 2 === t9.touches.length && this._zooming) {
+                var e14 = this._map, i23 = e14.mouseEventToContainerPoint(t9.touches[0]), n21 = e14.mouseEventToContainerPoint(t9.touches[1]), o17 = i23.distanceTo(n21) / this._startDist;
+                if (this._zoom = e14.getScaleZoom(o17, this._startZoom), !e14.options.bounceAtZoomLimits && (this._zoom < e14.getMinZoom() && o17 < 1 || this._zoom > e14.getMaxZoom() && 1 < o17) && (this._zoom = e14._limitZoom(this._zoom)), "center" === e14.options.touchZoom) {
+                    if (this._center = this._startLatLng, 1 == o17) return;
                 } else {
-                    var s10 = e16._add(n15)._divideBy(2)._subtract(this._centerPoint);
-                    if (1 == o13 && 0 === s10.x && 0 === s10.y) return;
-                    this._center = i11.unproject(i11.project(this._pinchStartLatLng, this._zoom).subtract(s10), this._zoom);
+                    i23 = i23._add(n21)._divideBy(2)._subtract(this._centerPoint);
+                    if (1 == o17 && 0 === i23.x && 0 === i23.y) return;
+                    this._center = e14.unproject(e14.project(this._pinchStartLatLng, this._zoom).subtract(i23), this._zoom);
                 }
-                this._moved || (i11._moveStart(!0, !1), this._moved = !0), z(this._animRequest);
-                var r10 = p(i11._move, i11, this._center, this._zoom, {
+                this._moved || (e14._moveStart(!0, !1), this._moved = !0), r(this._animRequest);
+                n21 = a2(e14._move, e14, this._center, this._zoom, {
                     pinch: !0,
                     round: !1
-                });
-                this._animRequest = M(r10, this, !0), Ri(t7);
+                }, void 0);
+                this._animRequest = x(n21, this, !0), O(t9);
             }
         },
         _onTouchEnd: function() {
-            this._moved && this._zooming ? (this._zooming = !1, z(this._animRequest), Si(document, "touchmove", this._onTouchMove, this), Si(document, "touchend", this._onTouchEnd, this), this._map.options.zoomAnimation ? this._map._animateZoom(this._center, this._map._limitZoom(this._zoom), !0, this._map.options.zoomSnap) : this._map._resetView(this._center, this._map._limitZoom(this._zoom))) : this._zooming = !1;
+            this._moved && this._zooming ? (this._zooming = !1, r(this._animRequest), k(document, "touchmove", this._onTouchMove, this), k(document, "touchend touchcancel", this._onTouchEnd, this), this._map.options.zoomAnimation ? this._map._animateZoom(this._center, this._map._limitZoom(this._zoom), !0, this._map.options.zoomSnap) : this._map._resetView(this._center, this._map._limitZoom(this._zoom))) : this._zooming = !1;
         }
-    });
-    Ki.addInitHook("addHandler", "touchZoom", Ln), Ki.BoxZoom = gn, Ki.DoubleClickZoom = vn, Ki.Drag = yn, Ki.Keyboard = xn, Ki.ScrollWheelZoom = wn, Ki.Tap = Pn, Ki.TouchZoom = Ln, t.version = "1.7.1", t.Control = Xi, t.control = Yi, t.Browser = Bt, t.Evented = E, t.Mixin = ne, t.Util = C, t.Class = S, t.Handler = ie, t.extend = h, t.bind = p, t.stamp = m, t.setOptions = c, t.DomEvent = qi, t.DomUtil = Mi, t.PosAnimation = Gi, t.Draggable = ae, t.LineUtil = fe, t.PolyUtil = ye, t.Point = k, t.point = A, t.Bounds = I, t.bounds = O, t.Transformation = q, t.transformation = G, t.Projection = Pe, t.LatLng = D, t.latLng = j, t.LatLngBounds = R, t.latLngBounds = N, t.CRS = H, t.GeoJSON = Ne, t.geoJSON = Ke, t.geoJson = Ye, t.Layer = Me, t.LayerGroup = ze, t.layerGroup = function(t7, i12) {
-        return new ze(t7, i12);
-    }, t.FeatureGroup = Ce, t.featureGroup = function(t7, i12) {
-        return new Ce(t7, i12);
-    }, t.ImageOverlay = Xe, t.imageOverlay = function(t7, i12, e17) {
-        return new Xe(t7, i12, e17);
-    }, t.VideoOverlay = Je, t.videoOverlay = function(t7, i12, e17) {
-        return new Je(t7, i12, e17);
-    }, t.SVGOverlay = $e, t.svgOverlay = function(t7, i12, e17) {
-        return new $e(t7, i12, e17);
-    }, t.DivOverlay = Qe, t.Popup = tn, t.popup = function(t7, i12) {
-        return new tn(t7, i12);
-    }, t.Tooltip = en, t.tooltip = function(t7, i12) {
-        return new en(t7, i12);
-    }, t.Icon = Se, t.icon = function(t7) {
-        return new Se(t7);
-    }, t.DivIcon = nn, t.divIcon = function(t7) {
-        return new nn(t7);
-    }, t.Marker = ke, t.marker = function(t7, i12) {
-        return new ke(t7, i12);
-    }, t.TileLayer = sn, t.tileLayer = rn, t.GridLayer = on, t.gridLayer = function(t7) {
-        return new on(t7);
-    }, t.SVG = pn, t.svg = mn, t.Renderer = hn, t.Canvas = un, t.canvas = ln, t.Path = Be, t.CircleMarker = Ae, t.circleMarker = function(t7, i12) {
-        return new Ae(t7, i12);
-    }, t.Circle = Ie, t.circle = function(t7, i12, e17) {
-        return new Ie(t7, i12, e17);
-    }, t.Polyline = Oe, t.polyline = function(t7, i12) {
-        return new Oe(t7, i12);
-    }, t.Polygon = Re, t.polygon = function(t7, i12) {
-        return new Re(t7, i12);
-    }, t.Rectangle = fn, t.rectangle = function(t7, i12) {
-        return new fn(t7, i12);
-    }, t.Map = Ki, t.map = function(t7, i12) {
-        return new Ki(t7, i12);
-    };
-    var bn = window.L;
+    })), Xi = (A.addInitHook("addHandler", "touchZoom", Ot), A.BoxZoom = _t, A.DoubleClickZoom = Ct, A.Drag = Zt, A.Keyboard = St, A.ScrollWheelZoom = Et, A.TapHold = kt, A.TouchZoom = Ot, t.Bounds = f, t.Browser = b, t.CRS = ot, t.Canvas = Fi, t.Circle = vi, t.CircleMarker = gi, t.Class = et, t.Control = B, t.DivIcon = Ri, t.DivOverlay = Ai, t.DomEvent = mt, t.DomUtil = pt, t.Draggable = Xe, t.Evented = it, t.FeatureGroup = ci, t.GeoJSON = wi, t.GridLayer = Ni, t.Handler = n7, t.Icon = di, t.ImageOverlay = Ei, t.LatLng = v, t.LatLngBounds = s, t.Layer = o6, t.LayerGroup = ui, t.LineUtil = vt, t.Map = A, t.Marker = mi, t.Mixin = ft, t.Path = fi, t.Point = p, t.PolyUtil = gt, t.Polygon = xi, t.Polyline = yi, t.Popup = Bi, t.PosAnimation = Fe, t.Projection = wt, t.Rectangle = Yi, t.Renderer = Wi, t.SVG = Gi, t.SVGOverlay = Oi, t.TileLayer = Di, t.Tooltip = Ii, t.Transformation = at, t.Util = tt, t.VideoOverlay = ki, t.bind = a2, t.bounds = _, t.canvas = Ui, t.circle = function(t9, e15, i24) {
+        return new vi(t9, e15, i24);
+    }, t.circleMarker = function(t9, e15) {
+        return new gi(t9, e15);
+    }, t.control = Ue, t.divIcon = function(t9) {
+        return new Ri(t9);
+    }, t.extend = l, t.featureGroup = function(t9, e15) {
+        return new ci(t9, e15);
+    }, t.geoJSON = Si, t.geoJson = Mt, t.gridLayer = function(t9) {
+        return new Ni(t9);
+    }, t.icon = function(t9) {
+        return new di(t9);
+    }, t.imageOverlay = function(t9, e15, i24) {
+        return new Ei(t9, e15, i24);
+    }, t.latLng = w, t.latLngBounds = g, t.layerGroup = function(t9, e15) {
+        return new ui(t9, e15);
+    }, t.map = function(t9, e15) {
+        return new A(t9, e15);
+    }, t.marker = function(t9, e15) {
+        return new mi(t9, e15);
+    }, t.point = m, t.polygon = function(t9, e15) {
+        return new xi(t9, e15);
+    }, t.polyline = function(t9, e15) {
+        return new yi(t9, e15);
+    }, t.popup = function(t9, e15) {
+        return new Bi(t9, e15);
+    }, t.rectangle = function(t9, e15) {
+        return new Yi(t9, e15);
+    }, t.setOptions = c, t.stamp = h, t.svg = Ki, t.svgOverlay = function(t9, e15, i24) {
+        return new Oi(t9, e15, i24);
+    }, t.tileLayer = ji, t.tooltip = function(t9, e15) {
+        return new Ii(t9, e15);
+    }, t.transformation = ht, t.version = "1.9.4", t.videoOverlay = function(t9, e15, i24) {
+        return new ki(t9, e15, i24);
+    }, window.L);
     t.noConflict = function() {
-        return window.L = bn, this;
+        return window.L = Xi, this;
     }, window.L = t;
 });
 
@@ -5832,14 +5929,17 @@ function fitBoundsPadding(e) {
 });
 
 },{"leaflet":"18D1d","proj4":"4Ct1V"}],"18D1d":[function(require,module,exports) {
-(function(global, factory) {
+/* @preserve
+ * Leaflet 1.9.4, a JS library for interactive maps. https://leafletjs.com
+ * (c) 2010-2023 Vladimir Agafonkin, (c) 2010-2011 CloudMade
+ */ (function(global, factory) {
     typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) : typeof define === 'function' && define.amd ? define([
         'exports'
-    ], factory) : factory(global.L = {
-    });
+    ], factory) : (global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.leaflet = {
+    }));
 })(this, function(exports) {
     'use strict';
-    var version = "1.7.1";
+    var version = "1.9.4";
     /*
    * @namespace Util
    *
@@ -5856,7 +5956,7 @@ function fitBoundsPadding(e) {
     }
     // @function create(proto: Object, properties?: Object): Object
     // Compatibility polyfill for [Object.create](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/create)
-    var create = Object.create || function() {
+    var create$2 = Object.create || function() {
         function F() {
         }
         return function(proto) {
@@ -5881,9 +5981,9 @@ function fitBoundsPadding(e) {
     // @function stamp(obj: Object): Number
     // Returns the unique ID of an object, assigning it one if it doesn't have it.
     function stamp(obj) {
-        /*eslint-disable */ obj._leaflet_id = obj._leaflet_id || ++lastId;
+        if (!('_leaflet_id' in obj)) obj['_leaflet_id'] = ++lastId;
         return obj._leaflet_id;
-    /* eslint-enable */ }
+    }
     // @function throttle(fn: Function, time: Number, context: Object): Function
     // Returns a function which executes function `fn` with the given scope `context`
     // (so that the `this` keyword refers to `context` inside `fn`'s code). The function
@@ -5926,10 +6026,13 @@ function fitBoundsPadding(e) {
     function falseFn() {
         return false;
     }
-    // @function formatNum(num: Number, digits?: Number): Number
-    // Returns the number `num` rounded to `digits` decimals, or to 6 decimals by default.
-    function formatNum(num, digits) {
-        var pow = Math.pow(10, digits === undefined ? 6 : digits);
+    // @function formatNum(num: Number, precision?: Number|false): Number
+    // Returns the number `num` rounded with specified `precision`.
+    // The default `precision` value is 6 decimal places.
+    // `false` can be passed to skip any processing (can be useful to avoid round-off errors).
+    function formatNum(num, precision) {
+        if (precision === false) return num;
+        var pow = Math.pow(10, precision === undefined ? 6 : precision);
         return Math.round(num * pow) / pow;
     }
     // @function trim(str: String): String
@@ -5945,7 +6048,7 @@ function fitBoundsPadding(e) {
     // @function setOptions(obj: Object, options: Object): Object
     // Merges the given properties to the `options` of the `obj` object, returning the resulting options. See `Class options`. Has an `L.setOptions` shortcut.
     function setOptions(obj, options) {
-        if (!Object.prototype.hasOwnProperty.call(obj, 'options')) obj.options = obj.options ? create(obj.options) : {
+        if (!Object.prototype.hasOwnProperty.call(obj, 'options')) obj.options = obj.options ? create$2(obj.options) : {
         };
         for(var i in options)obj.options[i] = options[i];
         return obj.options;
@@ -5960,7 +6063,7 @@ function fitBoundsPadding(e) {
         for(var i in obj)params.push(encodeURIComponent(uppercase ? i.toUpperCase() : i) + '=' + encodeURIComponent(obj[i]));
         return (!existingUrl || existingUrl.indexOf('?') === -1 ? '?' : '&') + params.join('&');
     }
-    var templateRe = /\{ *([\w_-]+) *\}/g;
+    var templateRe = /\{ *([\w_ -]+) *\}/g;
     // @function template(str: String, data: Object): String
     // Simple templating facility, accepts a template string of the form `'Hello {a}, {b}'`
     // and a data object like `{a: 'foo', b: 'bar'}`, returns evaluated string
@@ -5992,7 +6095,7 @@ function fitBoundsPadding(e) {
     // Used as a hack to free memory from unused images on WebKit-powered
     // mobile devices (by setting image `src` to this string).
     var emptyImageUrl = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
-    // inspired by http://paulirish.com/2011/requestanimationframe-for-smart-animating/
+    // inspired by https://paulirish.com/2011/requestanimationframe-for-smart-animating/
     function getPrefixed(name) {
         return window['webkit' + name] || window['moz' + name] || window['ms' + name];
     }
@@ -6023,10 +6126,13 @@ function fitBoundsPadding(e) {
         if (id) cancelFn.call(window, id);
     }
     var Util = {
+        __proto__: null,
         extend: extend,
-        create: create,
+        create: create$2,
         bind: bind,
-        lastId: lastId,
+        get lastId () {
+            return lastId;
+        },
         stamp: stamp,
         throttle: throttle,
         wrapNum: wrapNum,
@@ -6057,34 +6163,37 @@ function fitBoundsPadding(e) {
         // [Extends the current class](#class-inheritance) given the properties to be included.
         // Returns a Javascript function that is a class constructor (to be called with `new`).
         var NewClass = function() {
+            setOptions(this);
             // call the constructor
             if (this.initialize) this.initialize.apply(this, arguments);
             // call all constructor hooks
             this.callInitHooks();
         };
         var parentProto = NewClass.__super__ = this.prototype;
-        var proto = create(parentProto);
+        var proto = create$2(parentProto);
         proto.constructor = NewClass;
         NewClass.prototype = proto;
         // inherit parent's statics
         for(var i in this)if (Object.prototype.hasOwnProperty.call(this, i) && i !== 'prototype' && i !== '__super__') NewClass[i] = this[i];
         // mix static properties into the class
-        if (props.statics) {
-            extend(NewClass, props.statics);
-            delete props.statics;
-        }
+        if (props.statics) extend(NewClass, props.statics);
         // mix includes into the prototype
         if (props.includes) {
             checkDeprecatedMixinEvents(props.includes);
             extend.apply(null, [
                 proto
             ].concat(props.includes));
-            delete props.includes;
         }
-        // merge options
-        if (proto.options) props.options = extend(create(proto.options), props.options);
         // mix given properties into the prototype
         extend(proto, props);
+        delete proto.statics;
+        delete proto.includes;
+        // merge options
+        if (proto.options) {
+            proto.options = parentProto.options ? create$2(parentProto.options) : {
+            };
+            extend(proto.options, props.options);
+        }
         proto._initHooks = [];
         // add method for calling all hooks
         proto.callInitHooks = function() {
@@ -6098,7 +6207,12 @@ function fitBoundsPadding(e) {
     // @function include(properties: Object): this
     // [Includes a mixin](#class-includes) into the current class.
     Class.include = function(props) {
+        var parentOptions = this.prototype.options;
         extend(this.prototype, props);
+        if (props.options) {
+            this.prototype.options = parentOptions;
+            this.mergeOptions(props.options);
+        }
         return this;
     };
     // @function mergeOptions(options: Object): this
@@ -6119,7 +6233,7 @@ function fitBoundsPadding(e) {
         return this;
     };
     function checkDeprecatedMixinEvents(includes) {
-        if (typeof L === 'undefined' || !L || !L.Mixin) return;
+        /* global L: true */ if (typeof L === 'undefined' || !L || !L.Mixin) return;
         includes = isArray(includes) ? includes : [
             includes
         ];
@@ -6178,64 +6292,68 @@ function fitBoundsPadding(e) {
   	 * @method off: this
   	 * Removes all listeners to all events on the object. This includes implicitly attached events.
   	 */ off: function(types, fn, context) {
-            if (!types) // clear all listeners if called without arguments
+            if (!arguments.length) // clear all listeners if called without arguments
             delete this._events;
             else if (typeof types === 'object') for(var type in types)this._off(type, types[type], fn);
             else {
                 types = splitWords(types);
-                for(var i = 0, len = types.length; i < len; i++)this._off(types[i], fn, context);
+                var removeAll = arguments.length === 1;
+                for(var i = 0, len = types.length; i < len; i++)if (removeAll) this._off(types[i]);
+                else this._off(types[i], fn, context);
             }
             return this;
         },
         // attach listener (without syntactic sugar now)
-        _on: function(type, fn, context) {
-            this._events = this._events || {
-            };
-            /* get/init listeners for type */ var typeListeners = this._events[type];
-            if (!typeListeners) {
-                typeListeners = [];
-                this._events[type] = typeListeners;
+        _on: function(type, fn, context, _once) {
+            if (typeof fn !== 'function') {
+                console.warn('wrong listener type: ' + typeof fn);
+                return;
             }
+            // check if fn already there
+            if (this._listens(type, fn, context) !== false) return;
             if (context === this) // Less memory footprint.
             context = undefined;
             var newListener = {
                 fn: fn,
                 ctx: context
-            }, listeners = typeListeners;
-            // check if fn already there
-            for(var i = 0, len = listeners.length; i < len; i++){
-                if (listeners[i].fn === fn && listeners[i].ctx === context) return;
-            }
-            listeners.push(newListener);
+            };
+            if (_once) newListener.once = true;
+            this._events = this._events || {
+            };
+            this._events[type] = this._events[type] || [];
+            this._events[type].push(newListener);
         },
         _off: function(type, fn, context) {
             var listeners, i, len;
             if (!this._events) return;
             listeners = this._events[type];
             if (!listeners) return;
-            if (!fn) {
-                // Set all removed listeners to noop so they are not called if remove happens in fire
+            if (arguments.length === 1) {
+                if (this._firingCount) // Set all removed listeners to noop
+                // so they are not called if remove happens in fire
                 for(i = 0, len = listeners.length; i < len; i++)listeners[i].fn = falseFn;
                 // clear all listeners for a type if function isn't specified
                 delete this._events[type];
                 return;
             }
-            if (context === this) context = undefined;
-            if (listeners) // find fn and remove it
-            for(i = 0, len = listeners.length; i < len; i++){
-                var l = listeners[i];
-                if (l.ctx !== context) continue;
-                if (l.fn === fn) {
+            if (typeof fn !== 'function') {
+                console.warn('wrong listener type: ' + typeof fn);
+                return;
+            }
+            // find fn and remove it
+            var index = this._listens(type, fn, context);
+            if (index !== false) {
+                var listener = listeners[index];
+                if (this._firingCount) {
                     // set the removed listener to noop so that's not called if remove happens in fire
-                    l.fn = falseFn;
-                    if (this._firingCount) /* copy array in case events are being fired */ this._events[type] = listeners = listeners.slice();
-                    listeners.splice(i, 1);
-                    return;
+                    listener.fn = falseFn;
+                    /* copy array in case events are being fired */ this._events[type] = listeners = listeners.slice();
                 }
+                listeners.splice(index, 1);
             }
         },
         // @method fire(type: String, data?: Object, propagate?: Boolean): this
-        // Fires an event of the specified type. You can optionally provide an data
+        // Fires an event of the specified type. You can optionally provide a data
         // object — the first argument of the listener function will contain its
         // properties. The event can optionally be propagated to event parents.
         fire: function(type, data, propagate) {
@@ -6252,7 +6370,10 @@ function fitBoundsPadding(e) {
                     this._firingCount = this._firingCount + 1 || 1;
                     for(var i = 0, len = listeners.length; i < len; i++){
                         var l = listeners[i];
-                        l.fn.call(l.ctx || this, event);
+                        // off overwrites l.fn, so we need to copy fn to a var
+                        var fn = l.fn;
+                        if (l.once) this.off(type, fn, l.ctx);
+                        fn.call(l.ctx || this, event);
                     }
                     this._firingCount--;
                 }
@@ -6261,29 +6382,54 @@ function fitBoundsPadding(e) {
             this._propagateEvent(event);
             return this;
         },
-        // @method listens(type: String): Boolean
+        // @method listens(type: String, propagate?: Boolean): Boolean
+        // @method listens(type: String, fn: Function, context?: Object, propagate?: Boolean): Boolean
         // Returns `true` if a particular event type has any listeners attached to it.
-        listens: function(type, propagate) {
+        // The verification can optionally be propagated, it will return `true` if parents have the listener attached to it.
+        listens: function(type, fn, context, propagate) {
+            if (typeof type !== 'string') console.warn('"string" type argument expected');
+            // we don't overwrite the input `fn` value, because we need to use it for propagation
+            var _fn = fn;
+            if (typeof fn !== 'function') {
+                propagate = !!fn;
+                _fn = undefined;
+                context = undefined;
+            }
             var listeners = this._events && this._events[type];
-            if (listeners && listeners.length) return true;
+            if (listeners && listeners.length) {
+                if (this._listens(type, _fn, context) !== false) return true;
+            }
             if (propagate) // also check parents for listeners if event propagates
             for(var id in this._eventParents){
-                if (this._eventParents[id].listens(type, propagate)) return true;
+                if (this._eventParents[id].listens(type, fn, context, propagate)) return true;
+            }
+            return false;
+        },
+        // returns the index (number) or false
+        _listens: function(type, fn, context) {
+            if (!this._events) return false;
+            var listeners = this._events[type] || [];
+            if (!fn) return !!listeners.length;
+            if (context === this) // Less memory footprint.
+            context = undefined;
+            for(var i = 0, len = listeners.length; i < len; i++){
+                if (listeners[i].fn === fn && listeners[i].ctx === context) return i;
             }
             return false;
         },
         // @method once(…): this
         // Behaves as [`on(…)`](#evented-on), except the listener will only get fired once and then removed.
         once: function(types, fn, context) {
-            if (typeof types === 'object') {
-                for(var type in types)this.once(type, types[type], fn);
-                return this;
+            // types can be a map of types/handlers
+            if (typeof types === 'object') for(var type in types)// we don't process space-separated events here for performance;
+            // it's a hot path since Layer uses the on(obj) syntax
+            this._on(type, types[type], fn, true);
+            else {
+                // types can be a string of space-separated words
+                types = splitWords(types);
+                for(var i = 0, len = types.length; i < len; i++)this._on(types[i], fn, context, true);
             }
-            var handler = bind(function() {
-                this.off(types, fn, context).off(types, handler, context);
-            }, this);
-            // add a listener that's executed once and removed after that
-            return this.on(types, fn, context).on(types, handler, context);
+            return this;
         },
         // @method addEventParent(obj: Evented): this
         // Adds an event parent - an `Evented` that will receive propagated events
@@ -6532,37 +6678,48 @@ function fitBoundsPadding(e) {
     Bounds.prototype = {
         // @method extend(point: Point): this
         // Extends the bounds to contain the given point.
-        extend: function(point) {
-            point = toPoint(point);
+        // @alternative
+        // @method extend(otherBounds: Bounds): this
+        // Extend the bounds to contain the given bounds
+        extend: function(obj) {
+            var min2, max2;
+            if (!obj) return this;
+            if (obj instanceof Point || typeof obj[0] === 'number' || 'x' in obj) min2 = max2 = toPoint(obj);
+            else {
+                obj = toBounds(obj);
+                min2 = obj.min;
+                max2 = obj.max;
+                if (!min2 || !max2) return this;
+            }
             // @property min: Point
             // The top left corner of the rectangle.
             // @property max: Point
             // The bottom right corner of the rectangle.
             if (!this.min && !this.max) {
-                this.min = point.clone();
-                this.max = point.clone();
+                this.min = min2.clone();
+                this.max = max2.clone();
             } else {
-                this.min.x = Math.min(point.x, this.min.x);
-                this.max.x = Math.max(point.x, this.max.x);
-                this.min.y = Math.min(point.y, this.min.y);
-                this.max.y = Math.max(point.y, this.max.y);
+                this.min.x = Math.min(min2.x, this.min.x);
+                this.max.x = Math.max(max2.x, this.max.x);
+                this.min.y = Math.min(min2.y, this.min.y);
+                this.max.y = Math.max(max2.y, this.max.y);
             }
             return this;
         },
         // @method getCenter(round?: Boolean): Point
         // Returns the center point of the bounds.
         getCenter: function(round) {
-            return new Point((this.min.x + this.max.x) / 2, (this.min.y + this.max.y) / 2, round);
+            return toPoint((this.min.x + this.max.x) / 2, (this.min.y + this.max.y) / 2, round);
         },
         // @method getBottomLeft(): Point
         // Returns the bottom-left point of the bounds.
         getBottomLeft: function() {
-            return new Point(this.min.x, this.max.y);
+            return toPoint(this.min.x, this.max.y);
         },
         // @method getTopRight(): Point
         // Returns the top-right point of the bounds.
         getTopRight: function() {
-            return new Point(this.max.x, this.min.y);
+            return toPoint(this.max.x, this.min.y);
         },
         // @method getTopLeft(): Point
         // Returns the top-left point of the bounds (i.e. [`this.min`](#bounds-min)).
@@ -6610,8 +6767,25 @@ function fitBoundsPadding(e) {
             var min = this.min, max = this.max, min2 = bounds.min, max2 = bounds.max, xOverlaps = max2.x > min.x && min2.x < max.x, yOverlaps = max2.y > min.y && min2.y < max.y;
             return xOverlaps && yOverlaps;
         },
+        // @method isValid(): Boolean
+        // Returns `true` if the bounds are properly initialized.
         isValid: function() {
             return !!(this.min && this.max);
+        },
+        // @method pad(bufferRatio: Number): Bounds
+        // Returns bounds created by extending or retracting the current bounds by a given ratio in each direction.
+        // For example, a ratio of 0.5 extends the bounds by 50% in each direction.
+        // Negative values will retract the bounds.
+        pad: function(bufferRatio) {
+            var min = this.min, max = this.max, heightBuffer = Math.abs(min.x - max.x) * bufferRatio, widthBuffer = Math.abs(min.y - max.y) * bufferRatio;
+            return toBounds(toPoint(min.x - heightBuffer, min.y - widthBuffer), toPoint(max.x + heightBuffer, max.y + widthBuffer));
+        },
+        // @method equals(otherBounds: Bounds): Boolean
+        // Returns `true` if the rectangle is equivalent to the given bounds.
+        equals: function(bounds) {
+            if (!bounds) return false;
+            bounds = toBounds(bounds);
+            return this.min.equals(bounds.getTopLeft()) && this.max.equals(bounds.getBottomRight());
         }
     };
     // @factory L.bounds(corner1: Point, corner2: Point)
@@ -6902,7 +7076,7 @@ function fitBoundsPadding(e) {
    * Object that defines coordinate reference systems for projecting
    * geographical points into pixel (screen) coordinates and back (and to
    * coordinates in other units for [WMS](https://en.wikipedia.org/wiki/Web_Map_Service) services). See
-   * [spatial reference system](http://en.wikipedia.org/wiki/Coordinate_reference_system).
+   * [spatial reference system](https://en.wikipedia.org/wiki/Spatial_reference_system).
    *
    * Leaflet defines the most usual CRSs by default. If you want to use a
    * CRS not defined by default, take a look at the
@@ -7008,7 +7182,7 @@ function fitBoundsPadding(e) {
         ],
         // Mean Earth Radius, as recommended for use by
         // the International Union of Geodesy and Geophysics,
-        // see http://rosettacode.org/wiki/Haversine_formula
+        // see https://rosettacode.org/wiki/Haversine_formula
         R: 6371000,
         // distance between two geographical points using spherical law of cosines approximation
         distance: function(latlng1, latlng2) {
@@ -7151,7 +7325,7 @@ function fitBoundsPadding(e) {
                 str += (j ? 'L' : 'M') + p.x + ' ' + p.y;
             }
             // closes the ring for polygons; "x" is VML syntax
-            str += closed ? svg ? 'z' : 'x' : '';
+            str += closed ? Browser.svg ? 'z' : 'x' : '';
         }
         // SVG complains about empty path strings
         return str || 'M0 0';
@@ -7169,7 +7343,7 @@ function fitBoundsPadding(e) {
    *   alert('Upgrade your browser, dude!');
    * }
    * ```
-   */ var style$1 = document.documentElement.style;
+   */ var style = document.documentElement.style;
     // @property ie: Boolean; `true` for all Internet Explorer versions (not Edge).
     var ie = 'ActiveXObject' in window;
     // @property ielt9: Boolean; `true` for Internet Explorer versions less than 9.
@@ -7180,12 +7354,12 @@ function fitBoundsPadding(e) {
     // `true` for webkit-based browsers like Chrome and Safari (including mobile versions).
     var webkit = userAgentContains('webkit');
     // @property android: Boolean
-    // `true` for any browser running on an Android platform.
+    // **Deprecated.** `true` for any browser running on an Android platform.
     var android = userAgentContains('android');
-    // @property android23: Boolean; `true` for browsers running on Android 2 or Android 3.
+    // @property android23: Boolean; **Deprecated.** `true` for browsers running on Android 2 or Android 3.
     var android23 = userAgentContains('android 2') || userAgentContains('android 3');
     /* See https://stackoverflow.com/a/17961266 for details on detecting stock Android */ var webkitVer = parseInt(/WebKit\/([0-9]+)|$/.exec(navigator.userAgent)[1], 10); // also matches AppleWebKit
-    // @property androidStock: Boolean; `true` for the Android stock browser (i.e. not Chrome)
+    // @property androidStock: Boolean; **Deprecated.** `true` for the Android stock browser (i.e. not Chrome)
     var androidStock = android && userAgentContains('Google') && webkitVer < 537 && !('AudioNode' in window);
     // @property opera: Boolean; `true` for the Opera browser
     var opera = !!window.opera;
@@ -7198,15 +7372,15 @@ function fitBoundsPadding(e) {
     var phantom = userAgentContains('phantom');
     // @property opera12: Boolean
     // `true` for the Opera browser supporting CSS transforms (version 12 or later).
-    var opera12 = 'OTransition' in style$1;
+    var opera12 = 'OTransition' in style;
     // @property win: Boolean; `true` when the browser is running in a Windows platform
     var win = navigator.platform.indexOf('Win') === 0;
     // @property ie3d: Boolean; `true` for all Internet Explorer versions supporting CSS transforms.
-    var ie3d = ie && 'transition' in style$1;
+    var ie3d = ie && 'transition' in style;
     // @property webkit3d: Boolean; `true` for webkit-based browsers supporting CSS transforms.
     var webkit3d = 'WebKitCSSMatrix' in window && 'm11' in new window.WebKitCSSMatrix() && !android23;
     // @property gecko3d: Boolean; `true` for gecko-based browsers supporting CSS transforms.
-    var gecko3d = 'MozPerspective' in style$1;
+    var gecko3d = 'MozPerspective' in style;
     // @property any3d: Boolean
     // `true` for all browsers supporting CSS transforms.
     var any3d = !window.L_DISABLE_3D && (ie3d || webkit3d || gecko3d) && !opera12 && !phantom;
@@ -7223,12 +7397,16 @@ function fitBoundsPadding(e) {
     // @property pointer: Boolean
     // `true` for all browsers supporting [pointer events](https://msdn.microsoft.com/en-us/library/dn433244%28v=vs.85%29.aspx).
     var pointer = !!(window.PointerEvent || msPointer);
-    // @property touch: Boolean
+    // @property touchNative: Boolean
     // `true` for all browsers supporting [touch events](https://developer.mozilla.org/docs/Web/API/Touch_events).
-    // This does not necessarily mean that the browser is running in a computer with
+    // **This does not necessarily mean** that the browser is running in a computer with
     // a touchscreen, it only means that the browser is capable of understanding
     // touch events.
-    var touch = !window.L_NO_TOUCH && (pointer || 'ontouchstart' in window || window.DocumentTouch && document instanceof window.DocumentTouch);
+    var touchNative = 'ontouchstart' in window || !!window.TouchEvent;
+    // @property touch: Boolean
+    // `true` for all browsers supporting either [touch](#browser-touch) or [pointer](#browser-pointer) events.
+    // Note: pointer events will be preferred (if available), and processed for all `touch*` listeners.
+    var touch = !window.L_NO_TOUCH && (touchNative || pointer);
     // @property mobileOpera: Boolean; `true` for the Opera browser in a mobile device.
     var mobileOpera = mobile && opera;
     // @property mobileGecko: Boolean
@@ -7257,15 +7435,20 @@ function fitBoundsPadding(e) {
     }();
     // @property canvas: Boolean
     // `true` when the browser supports [`<canvas>`](https://developer.mozilla.org/docs/Web/API/Canvas_API).
-    var canvas = function() {
+    var canvas$1 = function() {
         return !!document.createElement('canvas').getContext;
     }();
     // @property svg: Boolean
     // `true` when the browser supports [SVG](https://developer.mozilla.org/docs/Web/SVG).
-    var svg = !!(document.createElementNS && svgCreate('svg').createSVGRect);
+    var svg$1 = !!(document.createElementNS && svgCreate('svg').createSVGRect);
+    var inlineSvg = !!svg$1 && function() {
+        var div = document.createElement('div');
+        div.innerHTML = '<svg/>';
+        return (div.firstChild && div.firstChild.namespaceURI) === 'http://www.w3.org/2000/svg';
+    }();
     // @property vml: Boolean
     // `true` if the browser supports [VML](https://en.wikipedia.org/wiki/Vector_Markup_Language).
-    var vml = !svg && function() {
+    var vml = !svg$1 && function() {
         try {
             var div = document.createElement('div');
             div.innerHTML = '<v:shape adj="1"/>';
@@ -7276,6 +7459,10 @@ function fitBoundsPadding(e) {
             return false;
         }
     }();
+    // @property mac: Boolean; `true` when the browser is running in a Mac platform
+    var mac = navigator.platform.indexOf('Mac') === 0;
+    // @property mac: Boolean; `true` when the browser is running in a Linux platform
+    var linux = navigator.platform.indexOf('Linux') === 0;
     function userAgentContains(str) {
         return navigator.userAgent.toLowerCase().indexOf(str) >= 0;
     }
@@ -7304,58 +7491,57 @@ function fitBoundsPadding(e) {
         msPointer: msPointer,
         pointer: pointer,
         touch: touch,
+        touchNative: touchNative,
         mobileOpera: mobileOpera,
         mobileGecko: mobileGecko,
         retina: retina,
         passiveEvents: passiveEvents,
-        canvas: canvas,
-        svg: svg,
-        vml: vml
+        canvas: canvas$1,
+        svg: svg$1,
+        vml: vml,
+        inlineSvg: inlineSvg,
+        mac: mac,
+        linux: linux
     };
     /*
    * Extends L.DomEvent to provide touch support for Internet Explorer and Windows-based devices.
-   */ var POINTER_DOWN = msPointer ? 'MSPointerDown' : 'pointerdown';
-    var POINTER_MOVE = msPointer ? 'MSPointerMove' : 'pointermove';
-    var POINTER_UP = msPointer ? 'MSPointerUp' : 'pointerup';
-    var POINTER_CANCEL = msPointer ? 'MSPointerCancel' : 'pointercancel';
+   */ var POINTER_DOWN = Browser.msPointer ? 'MSPointerDown' : 'pointerdown';
+    var POINTER_MOVE = Browser.msPointer ? 'MSPointerMove' : 'pointermove';
+    var POINTER_UP = Browser.msPointer ? 'MSPointerUp' : 'pointerup';
+    var POINTER_CANCEL = Browser.msPointer ? 'MSPointerCancel' : 'pointercancel';
+    var pEvent = {
+        touchstart: POINTER_DOWN,
+        touchmove: POINTER_MOVE,
+        touchend: POINTER_UP,
+        touchcancel: POINTER_CANCEL
+    };
+    var handle = {
+        touchstart: _onPointerStart,
+        touchmove: _handlePointer,
+        touchend: _handlePointer,
+        touchcancel: _handlePointer
+    };
     var _pointers = {
     };
     var _pointerDocListener = false;
     // Provides a touch events wrapper for (ms)pointer events.
-    // ref http://www.w3.org/TR/pointerevents/ https://www.w3.org/Bugs/Public/show_bug.cgi?id=22890
-    function addPointerListener(obj, type, handler, id) {
-        if (type === 'touchstart') _addPointerStart(obj, handler, id);
-        else if (type === 'touchmove') _addPointerMove(obj, handler, id);
-        else if (type === 'touchend') _addPointerEnd(obj, handler, id);
-        return this;
-    }
-    function removePointerListener(obj, type, id) {
-        var handler = obj['_leaflet_' + type + id];
-        if (type === 'touchstart') obj.removeEventListener(POINTER_DOWN, handler, false);
-        else if (type === 'touchmove') obj.removeEventListener(POINTER_MOVE, handler, false);
-        else if (type === 'touchend') {
-            obj.removeEventListener(POINTER_UP, handler, false);
-            obj.removeEventListener(POINTER_CANCEL, handler, false);
+    // ref https://www.w3.org/TR/pointerevents/ https://www.w3.org/Bugs/Public/show_bug.cgi?id=22890
+    function addPointerListener(obj, type, handler) {
+        if (type === 'touchstart') _addPointerDocListener();
+        if (!handle[type]) {
+            console.warn('wrong event specified:', type);
+            return falseFn;
         }
-        return this;
+        handler = handle[type].bind(this, handler);
+        obj.addEventListener(pEvent[type], handler, false);
+        return handler;
     }
-    function _addPointerStart(obj, handler, id) {
-        var onDown = bind(function(e) {
-            // IE10 specific: MsTouch needs preventDefault. See #2000
-            if (e.MSPOINTER_TYPE_TOUCH && e.pointerType === e.MSPOINTER_TYPE_TOUCH) preventDefault(e);
-            _handlePointer(e, handler);
-        });
-        obj['_leaflet_touchstart' + id] = onDown;
-        obj.addEventListener(POINTER_DOWN, onDown, false);
-        // need to keep track of what pointers and how many are active to provide e.touches emulation
-        if (!_pointerDocListener) {
-            // we listen document as any drags that end by moving the touch off the screen get fired there
-            document.addEventListener(POINTER_DOWN, _globalPointerDown, true);
-            document.addEventListener(POINTER_MOVE, _globalPointerMove, true);
-            document.addEventListener(POINTER_UP, _globalPointerUp, true);
-            document.addEventListener(POINTER_CANCEL, _globalPointerUp, true);
-            _pointerDocListener = true;
+    function removePointerListener(obj, type, handler) {
+        if (!pEvent[type]) {
+            console.warn('wrong event specified:', type);
+            return;
         }
+        obj.removeEventListener(pEvent[type], handler, false);
     }
     function _globalPointerDown(e) {
         _pointers[e.pointerId] = e;
@@ -7366,7 +7552,19 @@ function fitBoundsPadding(e) {
     function _globalPointerUp(e) {
         delete _pointers[e.pointerId];
     }
-    function _handlePointer(e, handler) {
+    function _addPointerDocListener() {
+        // need to keep track of what pointers and how many are active to provide e.touches emulation
+        if (!_pointerDocListener) {
+            // we listen document as any drags that end by moving the touch off the screen get fired there
+            document.addEventListener(POINTER_DOWN, _globalPointerDown, true);
+            document.addEventListener(POINTER_MOVE, _globalPointerMove, true);
+            document.addEventListener(POINTER_UP, _globalPointerUp, true);
+            document.addEventListener(POINTER_CANCEL, _globalPointerUp, true);
+            _pointerDocListener = true;
+        }
+    }
+    function _handlePointer(handler, e) {
+        if (e.pointerType === (e.MSPOINTER_TYPE_MOUSE || 'mouse')) return;
         e.touches = [];
         for(var i in _pointers)e.touches.push(_pointers[i]);
         e.changedTouches = [
@@ -7374,87 +7572,73 @@ function fitBoundsPadding(e) {
         ];
         handler(e);
     }
-    function _addPointerMove(obj, handler, id) {
-        var onMove = function(e) {
-            // don't fire touch moves when mouse isn't down
-            if (e.pointerType === (e.MSPOINTER_TYPE_MOUSE || 'mouse') && e.buttons === 0) return;
-            _handlePointer(e, handler);
-        };
-        obj['_leaflet_touchmove' + id] = onMove;
-        obj.addEventListener(POINTER_MOVE, onMove, false);
-    }
-    function _addPointerEnd(obj, handler, id) {
-        var onUp = function(e) {
-            _handlePointer(e, handler);
-        };
-        obj['_leaflet_touchend' + id] = onUp;
-        obj.addEventListener(POINTER_UP, onUp, false);
-        obj.addEventListener(POINTER_CANCEL, onUp, false);
+    function _onPointerStart(handler, e) {
+        // IE10 specific: MsTouch needs preventDefault. See #2000
+        if (e.MSPOINTER_TYPE_TOUCH && e.pointerType === e.MSPOINTER_TYPE_TOUCH) preventDefault(e);
+        _handlePointer(handler, e);
     }
     /*
    * Extends the event handling code with double tap support for mobile browsers.
-   */ var _touchstart = msPointer ? 'MSPointerDown' : pointer ? 'pointerdown' : 'touchstart';
-    var _touchend = msPointer ? 'MSPointerUp' : pointer ? 'pointerup' : 'touchend';
-    var _pre = '_leaflet_';
-    // inspired by Zepto touch code by Thomas Fuchs
-    function addDoubleTapListener(obj, handler, id) {
-        var last, touch$$1, doubleTap = false, delay = 250;
-        function onTouchStart(e) {
-            if (pointer) {
-                if (!e.isPrimary) return;
-                if (e.pointerType === 'mouse') return;
-                 // mouse fires native dblclick
-            } else if (e.touches.length > 1) return;
-            var now = Date.now(), delta = now - (last || now);
-            touch$$1 = e.touches ? e.touches[0] : e;
-            doubleTap = delta > 0 && delta <= delay;
+   *
+   * Note: currently most browsers fire native dblclick, with only a few exceptions
+   * (see https://github.com/Leaflet/Leaflet/issues/7012#issuecomment-595087386)
+   */ function makeDblclick(event) {
+        // in modern browsers `type` cannot be just overridden:
+        // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Errors/Getter_only
+        var newEvent = {
+        }, prop, i;
+        for(i in event){
+            prop = event[i];
+            newEvent[i] = prop && prop.bind ? prop.bind(event) : prop;
+        }
+        event = newEvent;
+        newEvent.type = 'dblclick';
+        newEvent.detail = 2;
+        newEvent.isTrusted = false;
+        newEvent._simulated = true; // for debug purposes
+        return newEvent;
+    }
+    var delay = 200;
+    function addDoubleTapListener(obj, handler) {
+        // Most browsers handle double tap natively
+        obj.addEventListener('dblclick', handler);
+        // On some platforms the browser doesn't fire native dblclicks for touch events.
+        // It seems that in all such cases `detail` property of `click` event is always `1`.
+        // So here we rely on that fact to avoid excessive 'dblclick' simulation when not needed.
+        var last = 0, detail;
+        function simDblclick(e) {
+            if (e.detail !== 1) {
+                detail = e.detail; // keep in sync to avoid false dblclick in some cases
+                return;
+            }
+            if (e.pointerType === 'mouse' || e.sourceCapabilities && !e.sourceCapabilities.firesTouchEvents) return;
+            // When clicking on an <input>, the browser generates a click on its
+            // <label> (and vice versa) triggering two clicks in quick succession.
+            // This ignores clicks on elements which are a label with a 'for'
+            // attribute (or children of such a label), but not children of
+            // a <input>.
+            var path = getPropagationPath(e);
+            if (path.some(function(el) {
+                return el instanceof HTMLLabelElement && el.attributes.for;
+            }) && !path.some(function(el) {
+                return el instanceof HTMLInputElement || el instanceof HTMLSelectElement;
+            })) return;
+            var now = Date.now();
+            if (now - last <= delay) {
+                detail++;
+                if (detail === 2) handler(makeDblclick(e));
+            } else detail = 1;
             last = now;
         }
-        function onTouchEnd(e) {
-            if (doubleTap && !touch$$1.cancelBubble) {
-                if (pointer) {
-                    if (e.pointerType === 'mouse') return;
-                    // work around .type being readonly with MSPointer* events
-                    var newTouch = {
-                    }, prop, i;
-                    for(i in touch$$1){
-                        prop = touch$$1[i];
-                        newTouch[i] = prop && prop.bind ? prop.bind(touch$$1) : prop;
-                    }
-                    touch$$1 = newTouch;
-                }
-                touch$$1.type = 'dblclick';
-                touch$$1.button = 0;
-                handler(touch$$1);
-                last = null;
-            }
-        }
-        obj[_pre + _touchstart + id] = onTouchStart;
-        obj[_pre + _touchend + id] = onTouchEnd;
-        obj[_pre + 'dblclick' + id] = handler;
-        obj.addEventListener(_touchstart, onTouchStart, passiveEvents ? {
-            passive: false
-        } : false);
-        obj.addEventListener(_touchend, onTouchEnd, passiveEvents ? {
-            passive: false
-        } : false);
-        // On some platforms (notably, chrome<55 on win10 + touchscreen + mouse),
-        // the browser doesn't fire touchend/pointerup events but does fire
-        // native dblclicks. See #4127.
-        // Edge 14 also fires native dblclicks, but only for pointerType mouse, see #5180.
-        obj.addEventListener('dblclick', handler, false);
-        return this;
+        obj.addEventListener('click', simDblclick);
+        return {
+            dblclick: handler,
+            simDblclick: simDblclick
+        };
     }
-    function removeDoubleTapListener(obj, id) {
-        var touchstart = obj[_pre + _touchstart + id], touchend = obj[_pre + _touchend + id], dblclick = obj[_pre + 'dblclick' + id];
-        obj.removeEventListener(_touchstart, touchstart, passiveEvents ? {
-            passive: false
-        } : false);
-        obj.removeEventListener(_touchend, touchend, passiveEvents ? {
-            passive: false
-        } : false);
-        obj.removeEventListener('dblclick', dblclick, false);
-        return this;
+    function removeDoubleTapListener(obj, handlers) {
+        obj.removeEventListener('dblclick', handlers.dblclick);
+        obj.removeEventListener('click', handlers.simDblclick);
     }
     /*
    * @namespace DomUtil
@@ -7497,11 +7681,11 @@ function fitBoundsPadding(e) {
     // @function getStyle(el: HTMLElement, styleAttrib: String): String
     // Returns the value for a certain style attribute on an element,
     // including computed values or values set through CSS.
-    function getStyle(el, style) {
-        var value = el.style[style] || el.currentStyle && el.currentStyle[style];
+    function getStyle(el, style1) {
+        var value = el.style[style1] || el.currentStyle && el.currentStyle[style1];
         if ((!value || value === 'auto') && document.defaultView) {
             var css = document.defaultView.getComputedStyle(el, null);
-            value = css ? css[style] : null;
+            value = css ? css[style1] : null;
         }
         return value === 'auto' ? null : value;
     }
@@ -7603,9 +7787,9 @@ function fitBoundsPadding(e) {
     // that is a valid style name for an element. If no such name is found,
     // it returns false. Useful for vendor-prefixed styles like `transform`.
     function testProp(props) {
-        var style = document.documentElement.style;
+        var style1 = document.documentElement.style;
         for(var i = 0; i < props.length; i++){
-            if (props[i] in style) return props[i];
+            if (props[i] in style1) return props[i];
         }
         return false;
     }
@@ -7615,7 +7799,7 @@ function fitBoundsPadding(e) {
     // browser doesn't support 3D CSS transforms.
     function setTransform(el, offset, scale) {
         var pos = offset || new Point(0, 0);
-        el.style[TRANSFORM] = (ie3d ? 'translate(' + pos.x + 'px,' + pos.y + 'px)' : 'translate3d(' + pos.x + 'px,' + pos.y + 'px,0)') + (scale ? ' scale(' + scale + ')' : '');
+        el.style[TRANSFORM] = (Browser.ie3d ? 'translate(' + pos.x + 'px,' + pos.y + 'px)' : 'translate3d(' + pos.x + 'px,' + pos.y + 'px,0)') + (scale ? ' scale(' + scale + ')' : '');
     }
     // @function setPosition(el: HTMLElement, position: Point)
     // Sets the position of `el` to coordinates specified by `position`,
@@ -7623,7 +7807,7 @@ function fitBoundsPadding(e) {
     // (used by Leaflet internally to position its layers).
     function setPosition(el, point) {
         /*eslint-disable */ el._leaflet_pos = point;
-        /* eslint-enable */ if (any3d) setTransform(el, point);
+        /* eslint-enable */ if (Browser.any3d) setTransform(el, point);
         else {
             el.style.left = point.x + 'px';
             el.style.top = point.y + 'px';
@@ -7663,9 +7847,9 @@ function fitBoundsPadding(e) {
         ]);
         disableTextSelection = function() {
             if (userSelectProperty) {
-                var style = document.documentElement.style;
-                _userSelect = style[userSelectProperty];
-                style[userSelectProperty] = 'none';
+                var style1 = document.documentElement.style;
+                _userSelect = style1[userSelectProperty];
+                style1[userSelectProperty] = 'none';
             }
         };
         enableTextSelection = function() {
@@ -7697,15 +7881,15 @@ function fitBoundsPadding(e) {
         if (!element.style) return;
         restoreOutline();
         _outlineElement = element;
-        _outlineStyle = element.style.outline;
-        element.style.outline = 'none';
+        _outlineStyle = element.style.outlineStyle;
+        element.style.outlineStyle = 'none';
         on(window, 'keydown', restoreOutline);
     }
     // @function restoreOutline()
     // Cancels the effects of a previous [`L.DomUtil.preventOutline`]().
     function restoreOutline() {
         if (!_outlineElement) return;
-        _outlineElement.style.outline = _outlineStyle;
+        _outlineElement.style.outlineStyle = _outlineStyle;
         _outlineElement = undefined;
         _outlineStyle = undefined;
         off(window, 'keydown', restoreOutline);
@@ -7730,6 +7914,7 @@ function fitBoundsPadding(e) {
         };
     }
     var DomUtil = {
+        __proto__: null,
         TRANSFORM: TRANSFORM,
         TRANSITION: TRANSITION,
         TRANSITION_END: TRANSITION_END,
@@ -7750,8 +7935,12 @@ function fitBoundsPadding(e) {
         setTransform: setTransform,
         setPosition: setPosition,
         getPosition: getPosition,
-        disableTextSelection: disableTextSelection,
-        enableTextSelection: enableTextSelection,
+        get disableTextSelection () {
+            return disableTextSelection;
+        },
+        get enableTextSelection () {
+            return enableTextSelection;
+        },
         disableImageDrag: disableImageDrag,
         enableImageDrag: enableImageDrag,
         preventOutline: preventOutline,
@@ -7772,7 +7961,7 @@ function fitBoundsPadding(e) {
     // @function on(el: HTMLElement, eventMap: Object, context?: Object): this
     // Adds a set of type/listener pairs, e.g. `{click: onClick, mousemove: onMouseMove}`
     function on(obj, types, fn, context) {
-        if (typeof types === 'object') for(var type in types)addOne(obj, type, types[type], fn);
+        if (types && typeof types === 'object') for(var type in types)addOne(obj, type, types[type], fn);
         else {
             types = splitWords(types);
             for(var i = 0, len = types.length; i < len; i++)addOne(obj, types[i], fn, context);
@@ -7787,20 +7976,31 @@ function fitBoundsPadding(e) {
     // @alternative
     // @function off(el: HTMLElement, eventMap: Object, context?: Object): this
     // Removes a set of type/listener pairs, e.g. `{click: onClick, mousemove: onMouseMove}`
+    // @alternative
+    // @function off(el: HTMLElement, types: String): this
+    // Removes all previously added listeners of given types.
+    // @alternative
+    // @function off(el: HTMLElement): this
+    // Removes all previously added listeners from given HTMLElement
     function off(obj, types, fn, context) {
-        if (typeof types === 'object') for(var type in types)removeOne(obj, type, types[type], fn);
-        else if (types) {
-            types = splitWords(types);
-            for(var i = 0, len = types.length; i < len; i++)removeOne(obj, types[i], fn, context);
-        } else {
-            for(var j in obj[eventsKey])removeOne(obj, j, obj[eventsKey][j]);
+        if (arguments.length === 1) {
+            batchRemove(obj);
             delete obj[eventsKey];
+        } else if (types && typeof types === 'object') for(var type in types)removeOne(obj, type, types[type], fn);
+        else {
+            types = splitWords(types);
+            if (arguments.length === 2) batchRemove(obj, function(type1) {
+                return indexOf(types, type1) !== -1;
+            });
+            else for(var i = 0, len = types.length; i < len; i++)removeOne(obj, types[i], fn, context);
         }
         return this;
     }
-    function browserFiresNativeDblClick() {
-        // See https://github.com/w3c/pointerevents/issues/171
-        if (pointer) return !(edge || safari);
+    function batchRemove(obj, filterFn) {
+        for(var id in obj[eventsKey]){
+            var type = id.split(/\d/)[0];
+            if (!filterFn || filterFn(type)) removeOne(obj, type, null, null, id);
+        }
     }
     var mouseSubst = {
         mouseenter: 'mouseover',
@@ -7814,11 +8014,11 @@ function fitBoundsPadding(e) {
             return fn.call(context || obj, e || window.event);
         };
         var originalHandler = handler;
-        if (pointer && type.indexOf('touch') === 0) // Needs DomEvent.Pointer.js
-        addPointerListener(obj, type, handler, id);
-        else if (touch && type === 'dblclick' && !browserFiresNativeDblClick()) addDoubleTapListener(obj, handler, id);
+        if (!Browser.touchNative && Browser.pointer && type.indexOf('touch') === 0) // Needs DomEvent.Pointer.js
+        handler = addPointerListener(obj, type, handler);
+        else if (Browser.touch && type === 'dblclick') handler = addDoubleTapListener(obj, handler);
         else if ('addEventListener' in obj) {
-            if (type === 'touchstart' || type === 'touchmove' || type === 'wheel' || type === 'mousewheel') obj.addEventListener(mouseSubst[type] || type, handler, passiveEvents ? {
+            if (type === 'touchstart' || type === 'touchmove' || type === 'wheel' || type === 'mousewheel') obj.addEventListener(mouseSubst[type] || type, handler, Browser.passiveEvents ? {
                 passive: false
             } : false);
             else if (type === 'mouseenter' || type === 'mouseleave') {
@@ -7828,18 +8028,19 @@ function fitBoundsPadding(e) {
                 };
                 obj.addEventListener(mouseSubst[type], handler, false);
             } else obj.addEventListener(type, originalHandler, false);
-        } else if ('attachEvent' in obj) obj.attachEvent('on' + type, handler);
+        } else obj.attachEvent('on' + type, handler);
         obj[eventsKey] = obj[eventsKey] || {
         };
         obj[eventsKey][id] = handler;
     }
-    function removeOne(obj, type, fn, context) {
-        var id = type + stamp(fn) + (context ? '_' + stamp(context) : ''), handler = obj[eventsKey] && obj[eventsKey][id];
+    function removeOne(obj, type, fn, context, id) {
+        id = id || type + stamp(fn) + (context ? '_' + stamp(context) : '');
+        var handler = obj[eventsKey] && obj[eventsKey][id];
         if (!handler) return this;
-        if (pointer && type.indexOf('touch') === 0) removePointerListener(obj, type, id);
-        else if (touch && type === 'dblclick' && !browserFiresNativeDblClick()) removeDoubleTapListener(obj, id);
+        if (!Browser.touchNative && Browser.pointer && type.indexOf('touch') === 0) removePointerListener(obj, type, handler);
+        else if (Browser.touch && type === 'dblclick') removeDoubleTapListener(obj, handler);
         else if ('removeEventListener' in obj) obj.removeEventListener(mouseSubst[type] || type, handler, false);
-        else if ('detachEvent' in obj) obj.detachEvent('on' + type, handler);
+        else obj.detachEvent('on' + type, handler);
         obj[eventsKey][id] = null;
     }
     // @function stopPropagation(ev: DOMEvent): this
@@ -7853,7 +8054,6 @@ function fitBoundsPadding(e) {
         if (e.stopPropagation) e.stopPropagation();
         else if (e.originalEvent) e.originalEvent._stopped = true;
         else e.cancelBubble = true;
-        skipped(e);
         return this;
     }
     // @function disableScrollPropagation(el: HTMLElement): this
@@ -7863,11 +8063,11 @@ function fitBoundsPadding(e) {
         return this;
     }
     // @function disableClickPropagation(el: HTMLElement): this
-    // Adds `stopPropagation` to the element's `'click'`, `'doubleclick'`,
+    // Adds `stopPropagation` to the element's `'click'`, `'dblclick'`, `'contextmenu'`,
     // `'mousedown'` and `'touchstart'` events (plus browser variants).
     function disableClickPropagation(el) {
-        on(el, 'mousedown touchstart dblclick', stopPropagation);
-        addOne(el, 'click', fakeStop);
+        on(el, 'mousedown touchstart dblclick contextmenu', stopPropagation);
+        el['_leaflet_disable_click'] = true;
         return this;
     }
     // @function preventDefault(ev: DOMEvent): this
@@ -7887,6 +8087,20 @@ function fitBoundsPadding(e) {
         stopPropagation(e);
         return this;
     }
+    // @function getPropagationPath(ev: DOMEvent): Array
+    // Compatibility polyfill for [`Event.composedPath()`](https://developer.mozilla.org/en-US/docs/Web/API/Event/composedPath).
+    // Returns an array containing the `HTMLElement`s that the given DOM event
+    // should propagate to (if not stopped).
+    function getPropagationPath(ev) {
+        if (ev.composedPath) return ev.composedPath();
+        var path = [];
+        var el = ev.target;
+        while(el){
+            path.push(el);
+            el = el.parentNode;
+        }
+        return path;
+    }
     // @function getMousePosition(ev: DOMEvent, container?: HTMLElement): Point
     // Gets normalized mouse position from a DOM event relative to the
     // `container` (border excluded) or to the whole page if not specified.
@@ -7897,28 +8111,17 @@ function fitBoundsPadding(e) {
         // whereas clientLeft/Top (border width) values are the original values (before CSS scale applies).
         (e.clientX - offset.left) / scale.x - container.clientLeft, (e.clientY - offset.top) / scale.y - container.clientTop);
     }
-    // Chrome on Win scrolls double the pixels as in other platforms (see #4538),
-    // and Firefox scrolls device pixels, not CSS pixels
-    var wheelPxFactor = win && chrome ? 2 * window.devicePixelRatio : gecko ? window.devicePixelRatio : 1;
+    //  except , Safari and
+    // We need double the scroll pixels (see #7403 and #4538) for all Browsers
+    // except OSX (Mac) -> 3x, Chrome running on Linux 1x
+    var wheelPxFactor = Browser.linux && Browser.chrome ? window.devicePixelRatio : Browser.mac ? window.devicePixelRatio * 3 : window.devicePixelRatio > 0 ? 2 * window.devicePixelRatio : 1;
     // @function getWheelDelta(ev: DOMEvent): Number
     // Gets normalized wheel delta from a wheel DOM event, in vertical
     // pixels scrolled (negative if scrolling down).
     // Events from pointing devices without precise scrolling are mapped to
     // a best guess of 60 pixels.
     function getWheelDelta(e) {
-        return edge ? e.wheelDeltaY / 2 : e.deltaY && e.deltaMode === 0 ? -e.deltaY / wheelPxFactor : e.deltaY && e.deltaMode === 1 ? -e.deltaY * 20 : e.deltaY && e.deltaMode === 2 ? -e.deltaY * 60 : e.deltaX || e.deltaZ ? 0 : e.wheelDelta ? (e.wheelDeltaY || e.wheelDelta) / 2 : e.detail && Math.abs(e.detail) < 32765 ? -e.detail * 20 : e.detail ? e.detail / -32765 * 60 : 0;
-    }
-    var skipEvents = {
-    };
-    function fakeStop(e) {
-        // fakes stopPropagation by setting a special event flag, checked/reset with skipped(e)
-        skipEvents[e.type] = true;
-    }
-    function skipped(e) {
-        var events = skipEvents[e.type];
-        // reset when checking, as it's only used in map container and propagates outside of the map
-        skipEvents[e.type] = false;
-        return events;
+        return Browser.edge ? e.wheelDeltaY / 2 : e.deltaY && e.deltaMode === 0 ? -e.deltaY / wheelPxFactor : e.deltaY && e.deltaMode === 1 ? -e.deltaY * 20 : e.deltaY && e.deltaMode === 2 ? -e.deltaY * 60 : e.deltaX || e.deltaZ ? 0 : e.wheelDelta ? (e.wheelDeltaY || e.wheelDelta) / 2 : e.detail && Math.abs(e.detail) < 32765 ? -e.detail * 20 : e.detail ? e.detail / -32765 * 60 : 0;
     }
     // check if element really left/entered the event target (for mouseenter/mouseleave)
     function isExternalTarget(el, e) {
@@ -7932,6 +8135,7 @@ function fitBoundsPadding(e) {
         return related !== el;
     }
     var DomEvent = {
+        __proto__: null,
         on: on,
         off: off,
         stopPropagation: stopPropagation,
@@ -7939,10 +8143,9 @@ function fitBoundsPadding(e) {
         disableClickPropagation: disableClickPropagation,
         preventDefault: preventDefault,
         stop: stop,
+        getPropagationPath: getPropagationPath,
         getMousePosition: getMousePosition,
         getWheelDelta: getWheelDelta,
-        fakeStop: fakeStop,
-        skipped: skipped,
         isExternalTarget: isExternalTarget,
         addListener: on,
         removeListener: off
@@ -7955,8 +8158,21 @@ function fitBoundsPadding(e) {
    *
    * @example
    * ```js
-   * var fx = new L.PosAnimation();
-   * fx.run(el, [300, 500], 0.5);
+   * var myPositionMarker = L.marker([48.864716, 2.294694]).addTo(map);
+   *
+   * myPositionMarker.on("click", function() {
+   * 	var pos = map.latLngToLayerPoint(myPositionMarker.getLatLng());
+   * 	pos.y -= 25;
+   * 	var fx = new L.PosAnimation();
+   *
+   * 	fx.once('end',function() {
+   * 		pos.y += 25;
+   * 		fx.run(myPositionMarker._icon, pos, 0.8);
+   * 	});
+   *
+   * 	fx.run(myPositionMarker._icon, pos, 0.3);
+   * });
+   *
    * ```
    *
    * @constructor L.PosAnimation()
@@ -7966,7 +8182,7 @@ function fitBoundsPadding(e) {
         // @method run(el: HTMLElement, newPos: Point, duration?: Number, easeLinearity?: Number)
         // Run an animation of a given element to a new position, optionally setting
         // duration in seconds (`0.25` by default) and easing linearity factor (3rd
-        // argument of the [cubic bezier curve](http://cubic-bezier.com/#0,0,.5,1),
+        // argument of the [cubic bezier curve](https://cubic-bezier.com/#0,0,.5,1),
         // `0.5` by default).
         run: function(el, newPos, duration, easeLinearity) {
             this.stop();
@@ -8136,7 +8352,7 @@ function fitBoundsPadding(e) {
             });
             this.callInitHooks();
             // don't animate on browsers without hardware-accelerated transitions or old Android/Opera
-            this._zoomAnimated = TRANSITION && any3d && !mobileOpera && this.options.zoomAnimation;
+            this._zoomAnimated = TRANSITION && Browser.any3d && !Browser.mobileOpera && this.options.zoomAnimation;
             // zoom transitions run with the same duration for all layers, so if one of transitionend events
             // happens after starting zoom animation (propagating to the map pane), we know that it ended globally
             if (this._zoomAnimated) {
@@ -8174,7 +8390,7 @@ function fitBoundsPadding(e) {
                 }
             }
             // animation didn't start, just reset the map view
-            this._resetView(center, zoom);
+            this._resetView(center, zoom, options.pan && options.pan.noMoveStart);
             return this;
         },
         // @method setZoom(zoom: Number, options?: Zoom/pan options): this
@@ -8191,13 +8407,13 @@ function fitBoundsPadding(e) {
         // @method zoomIn(delta?: Number, options?: Zoom options): this
         // Increases the zoom of the map by `delta` ([`zoomDelta`](#map-zoomdelta) by default).
         zoomIn: function(delta, options) {
-            delta = delta || (any3d ? this.options.zoomDelta : 1);
+            delta = delta || (Browser.any3d ? this.options.zoomDelta : 1);
             return this.setZoom(this._zoom + delta, options);
         },
         // @method zoomOut(delta?: Number, options?: Zoom options): this
         // Decreases the zoom of the map by `delta` ([`zoomDelta`](#map-zoomdelta) by default).
         zoomOut: function(delta, options) {
-            delta = delta || (any3d ? this.options.zoomDelta : 1);
+            delta = delta || (Browser.any3d ? this.options.zoomDelta : 1);
             return this.setZoom(this._zoom - delta, options);
         },
         // @method setZoomAround(latlng: LatLng, zoom: Number, options: Zoom options): this
@@ -8304,7 +8520,7 @@ function fitBoundsPadding(e) {
         flyTo: function(targetCenter, targetZoom, options) {
             options = options || {
             };
-            if (options.animate === false || !any3d) return this.setView(targetCenter, targetZoom, options);
+            if (options.animate === false || !Browser.any3d) return this.setView(targetCenter, targetZoom, options);
             this._stop();
             var from = this.project(this.getCenter()), to = this.project(targetCenter), size = this.getSize(), startZoom = this._zoom;
             targetCenter = toLatLng(targetCenter);
@@ -8361,10 +8577,11 @@ function fitBoundsPadding(e) {
         // Restricts the map view to the given bounds (see the [maxBounds](#map-maxbounds) option).
         setMaxBounds: function(bounds) {
             bounds = toLatLngBounds(bounds);
+            if (this.listens('moveend', this._panInsideMaxBounds)) this.off('moveend', this._panInsideMaxBounds);
             if (!bounds.isValid()) {
                 this.options.maxBounds = null;
-                return this.off('moveend', this._panInsideMaxBounds);
-            } else if (this.options.maxBounds) this.off('moveend', this._panInsideMaxBounds);
+                return this;
+            }
             this.options.maxBounds = bounds;
             if (this._loaded) this._panInsideMaxBounds();
             return this.on('moveend', this._panInsideMaxBounds);
@@ -8400,10 +8617,9 @@ function fitBoundsPadding(e) {
             this._enforcingBounds = false;
             return this;
         },
-        // @method panInside(latlng: LatLng, options?: options): this
+        // @method panInside(latlng: LatLng, options?: padding options): this
         // Pans the map the minimum amount to make the `latlng` visible. Use
-        // `padding`, `paddingTopLeft` and `paddingTopRight` options to fit
-        // the display to more restricted bounds, like [`fitBounds`](#map-fitbounds).
+        // padding options to fit the display to more restricted bounds.
         // If `latlng` is already within the (optionally padded) display bounds,
         // the map will not be panned.
         panInside: function(latlng, options) {
@@ -8415,24 +8631,17 @@ function fitBoundsPadding(e) {
             ]), paddingBR = toPoint(options.paddingBottomRight || options.padding || [
                 0,
                 0
-            ]), center = this.getCenter(), pixelCenter = this.project(center), pixelPoint = this.project(latlng), pixelBounds = this.getPixelBounds(), halfPixelBounds = pixelBounds.getSize().divideBy(2), paddedBounds = toBounds([
+            ]), pixelCenter = this.project(this.getCenter()), pixelPoint = this.project(latlng), pixelBounds = this.getPixelBounds(), paddedBounds = toBounds([
                 pixelBounds.min.add(paddingTL),
                 pixelBounds.max.subtract(paddingBR)
-            ]);
+            ]), paddedSize = paddedBounds.getSize();
             if (!paddedBounds.contains(pixelPoint)) {
                 this._enforcingBounds = true;
-                var diff = pixelCenter.subtract(pixelPoint), newCenter = toPoint(pixelPoint.x + diff.x, pixelPoint.y + diff.y);
-                if (pixelPoint.x < paddedBounds.min.x || pixelPoint.x > paddedBounds.max.x) {
-                    newCenter.x = pixelCenter.x - diff.x;
-                    if (diff.x > 0) newCenter.x += halfPixelBounds.x - paddingTL.x;
-                    else newCenter.x -= halfPixelBounds.x - paddingBR.x;
-                }
-                if (pixelPoint.y < paddedBounds.min.y || pixelPoint.y > paddedBounds.max.y) {
-                    newCenter.y = pixelCenter.y - diff.y;
-                    if (diff.y > 0) newCenter.y += halfPixelBounds.y - paddingTL.y;
-                    else newCenter.y -= halfPixelBounds.y - paddingBR.y;
-                }
-                this.panTo(this.unproject(newCenter), options);
+                var centerOffset = pixelPoint.subtract(paddedBounds.getCenter());
+                var offset = paddedBounds.extend(pixelPoint).getSize().subtract(paddedSize);
+                pixelCenter.x += centerOffset.x < 0 ? -offset.x : offset.x;
+                pixelCenter.y += centerOffset.y < 0 ? -offset.y : offset.y;
+                this.panTo(this.unproject(pixelCenter), options);
                 this._enforcingBounds = false;
             }
             return this;
@@ -8523,6 +8732,7 @@ function fitBoundsPadding(e) {
             return this;
         },
         _handleGeolocationError: function(error) {
+            if (!this._container._leaflet_id) return;
             var c = error.code, message = error.message || (c === 1 ? 'permission denied' : c === 2 ? 'position unavailable' : 'timeout');
             if (this._locateOptions.setView && !this._loaded) this.fitWorld();
             // @section Location events
@@ -8534,6 +8744,7 @@ function fitBoundsPadding(e) {
             });
         },
         _handleGeolocationResponse: function(pos) {
+            if (!this._container._leaflet_id) return;
             var lat = pos.coords.latitude, lng = pos.coords.longitude, latlng = new LatLng(lat, lng), bounds = latlng.toBounds(pos.coords.accuracy * 2), options = this._locateOptions;
             if (options.setView) {
                 var zoom = this.getBoundsZoom(bounds);
@@ -8565,7 +8776,7 @@ function fitBoundsPadding(e) {
         // Destroys the map and clears all related event listeners.
         remove: function() {
             this._initEvents(true);
-            this.off('moveend', this._panInsideMaxBounds);
+            if (this.options.maxBounds) this.off('moveend', this._panInsideMaxBounds);
             if (this._containerId !== this._container._leaflet_id) throw new Error('Map container is being reused by another instance');
             try {
                 // throws error in IE6-8
@@ -8612,7 +8823,7 @@ function fitBoundsPadding(e) {
         // Returns the geographical center of the map view
         getCenter: function() {
             this._checkIfLoaded();
-            if (this._lastCenter && !this._moved()) return this._lastCenter;
+            if (this._lastCenter && !this._moved()) return this._lastCenter.clone();
             return this.layerPointToLatLng(this._getCenterLayerPoint());
         },
         // @method getZoom(): Number
@@ -8647,7 +8858,7 @@ function fitBoundsPadding(e) {
                 0,
                 0
             ]);
-            var zoom = this.getZoom() || 0, min = this.getMinZoom(), max = this.getMaxZoom(), nw = bounds.getNorthWest(), se = bounds.getSouthEast(), size = this.getSize().subtract(padding), boundsSize = toBounds(this.project(se, zoom), this.project(nw, zoom)).getSize(), snap = any3d ? this.options.zoomSnap : 1, scalex = size.x / boundsSize.x, scaley = size.y / boundsSize.y, scale = inside ? Math.max(scalex, scaley) : Math.min(scalex, scaley);
+            var zoom = this.getZoom() || 0, min = this.getMinZoom(), max = this.getMaxZoom(), nw = bounds.getNorthWest(), se = bounds.getSouthEast(), size = this.getSize().subtract(padding), boundsSize = toBounds(this.project(se, zoom), this.project(nw, zoom)).getSize(), snap = Browser.any3d ? this.options.zoomSnap : 1, scalex = size.x / boundsSize.x, scaley = size.y / boundsSize.y, scale = inside ? Math.max(scalex, scaley) : Math.min(scalex, scaley);
             zoom = this.getScaleZoom(scale, zoom);
             if (snap) {
                 zoom = Math.round(zoom / (snap / 100)) * (snap / 100); // don't jump if within 1% of a snap level
@@ -8830,10 +9041,10 @@ function fitBoundsPadding(e) {
         },
         _initLayout: function() {
             var container = this._container;
-            this._fadeAnimated = this.options.fadeAnimation && any3d;
-            addClass(container, 'leaflet-container' + (touch ? ' leaflet-touch' : '') + (retina ? ' leaflet-retina' : '') + (ielt9 ? ' leaflet-oldie' : '') + (safari ? ' leaflet-safari' : '') + (this._fadeAnimated ? ' leaflet-fade-anim' : ''));
+            this._fadeAnimated = this.options.fadeAnimation && Browser.any3d;
+            addClass(container, 'leaflet-container' + (Browser.touch ? ' leaflet-touch' : '') + (Browser.retina ? ' leaflet-retina' : '') + (Browser.ielt9 ? ' leaflet-oldie' : '') + (Browser.safari ? ' leaflet-safari' : '') + (this._fadeAnimated ? ' leaflet-fade-anim' : ''));
             var position = getStyle(container, 'position');
-            if (position !== 'absolute' && position !== 'relative' && position !== 'fixed') container.style.position = 'relative';
+            if (position !== 'absolute' && position !== 'relative' && position !== 'fixed' && position !== 'sticky') container.style.position = 'relative';
             this._initPanes();
             if (this._initControlPos) this._initControlPos();
         },
@@ -8859,11 +9070,11 @@ function fitBoundsPadding(e) {
             // Pane for `GridLayer`s and `TileLayer`s
             this.createPane('tilePane');
             // @pane overlayPane: HTMLElement = 400
-            // Pane for overlay shadows (e.g. `Marker` shadows)
-            this.createPane('shadowPane');
-            // @pane shadowPane: HTMLElement = 500
             // Pane for vectors (`Path`s, like `Polyline`s and `Polygon`s), `ImageOverlay`s and `VideoOverlay`s
             this.createPane('overlayPane');
+            // @pane shadowPane: HTMLElement = 500
+            // Pane for overlay shadows (e.g. `Marker` shadows)
+            this.createPane('shadowPane');
             // @pane markerPane: HTMLElement = 600
             // Pane for `Icon`s of `Marker`s
             this.createPane('markerPane');
@@ -8880,14 +9091,14 @@ function fitBoundsPadding(e) {
         },
         // private methods that modify map state
         // @section Map state change events
-        _resetView: function(center, zoom) {
+        _resetView: function(center, zoom, noMoveStart) {
             setPosition(this._mapPane, new Point(0, 0));
             var loading = !this._loaded;
             this._loaded = true;
             zoom = this._limitZoom(zoom);
             this.fire('viewprereset');
             var zoomChanged = this._zoom !== zoom;
-            this._moveStart(zoomChanged, false)._move(center, zoom)._moveEnd(zoomChanged);
+            this._moveStart(zoomChanged, noMoveStart)._move(center, zoom)._moveEnd(zoomChanged);
             // @event viewreset: Event
             // Fired when the map needs to redraw its content (this usually happens
             // on map zoom or load). Very useful for creating custom overlays.
@@ -8906,28 +9117,31 @@ function fitBoundsPadding(e) {
             if (!noMoveStart) this.fire('movestart');
             return this;
         },
-        _move: function(center, zoom, data) {
+        _move: function(center, zoom, data, supressEvent) {
             if (zoom === undefined) zoom = this._zoom;
             var zoomChanged = this._zoom !== zoom;
             this._zoom = zoom;
             this._lastCenter = center;
             this._pixelOrigin = this._getNewPixelOrigin(center);
-            // @event zoom: Event
-            // Fired repeatedly during any change in zoom level, including zoom
-            // and fly animations.
-            if (zoomChanged || data && data.pinch) this.fire('zoom', data);
-            // @event move: Event
-            // Fired repeatedly during any movement of the map, including pan and
-            // fly animations.
-            return this.fire('move', data);
+            if (!supressEvent) {
+                // @event zoom: Event
+                // Fired repeatedly during any change in zoom level,
+                // including zoom and fly animations.
+                if (zoomChanged || data && data.pinch) this.fire('zoom', data);
+                // @event move: Event
+                // Fired repeatedly during any movement of the map,
+                // including pan and fly animations.
+                this.fire('move', data);
+            } else if (data && data.pinch) this.fire('zoom', data);
+            return this;
         },
         _moveEnd: function(zoomChanged) {
             // @event zoomend: Event
-            // Fired when the map has changed, after any animations.
+            // Fired when the map zoom changed, after any animations.
             if (zoomChanged) this.fire('zoomend');
             // @event moveend: Event
-            // Fired when the center of the map stops changing (e.g. user stopped
-            // dragging the map).
+            // Fired when the center of the map stops changing
+            // (e.g. user stopped dragging the map or after non-centered zoom).
             return this.fire('moveend');
         },
         _stop: function() {
@@ -8949,11 +9163,11 @@ function fitBoundsPadding(e) {
         },
         // DOM event handling
         // @section Interaction events
-        _initEvents: function(remove$$1) {
+        _initEvents: function(remove1) {
             this._targets = {
             };
             this._targets[stamp(this._container)] = this;
-            var onOff = remove$$1 ? off : on;
+            var onOff = remove1 ? off : on;
             // @event click: MouseEvent
             // Fired when the user clicks (or taps) the map.
             // @event dblclick: MouseEvent
@@ -8983,7 +9197,7 @@ function fitBoundsPadding(e) {
             // Fired when the user releases a key from the keyboard while the map is focused.
             onOff(this._container, "click dblclick mousedown mouseup mouseover mouseout mousemove contextmenu keypress keydown keyup", this._handleDOMEvent, this);
             if (this.options.trackResize) onOff(window, 'resize', this._onResize, this);
-            if (any3d && this.options.transform3DLimit) (remove$$1 ? this.off : this.on).call(this, 'moveend', this._onMoveEnd);
+            if (Browser.any3d && this.options.transform3DLimit) (remove1 ? this.off : this.on).call(this, 'moveend', this._onMoveEnd);
         },
         _onResize: function() {
             cancelAnimFrame(this._resizeRequest);
@@ -9000,14 +9214,14 @@ function fitBoundsPadding(e) {
         _onMoveEnd: function() {
             var pos = this._getMapPanePos();
             if (Math.max(Math.abs(pos.x), Math.abs(pos.y)) >= this.options.transform3DLimit) // https://bugzilla.mozilla.org/show_bug.cgi?id=1203873 but Webkit also have
-            // a pixel offset on very high values, see: http://jsfiddle.net/dg6r5hhb/
+            // a pixel offset on very high values, see: https://jsfiddle.net/dg6r5hhb/
             this._resetView(this.getCenter(), this.getZoom());
         },
         _findEventTargets: function(e, type) {
             var targets = [], target, isHover = type === 'mouseout' || type === 'mouseover', src = e.target || e.srcElement, dragging = false;
             while(src){
                 target = this._targets[stamp(src)];
-                if (target && (type === 'click' || type === 'preclick') && !e._simulated && this._draggableMoved(target)) {
+                if (target && (type === 'click' || type === 'preclick') && this._draggableMoved(target)) {
                     // Prevent firing click after you just dragged an object.
                     dragging = true;
                     break;
@@ -9020,16 +9234,23 @@ function fitBoundsPadding(e) {
                 if (src === this._container) break;
                 src = src.parentNode;
             }
-            if (!targets.length && !dragging && !isHover && isExternalTarget(src, e)) targets = [
+            if (!targets.length && !dragging && !isHover && this.listens(type, true)) targets = [
                 this
             ];
             return targets;
         },
+        _isClickDisabled: function(el) {
+            while(el && el !== this._container){
+                if (el['_leaflet_disable_click']) return true;
+                el = el.parentNode;
+            }
+        },
         _handleDOMEvent: function(e) {
-            if (!this._loaded || skipped(e)) return;
+            var el = e.target || e.srcElement;
+            if (!this._loaded || el['_leaflet_disable_events'] || e.type === 'click' && this._isClickDisabled(el)) return;
             var type = e.type;
-            if (type === 'mousedown' || type === 'keypress' || type === 'keyup' || type === 'keydown') // prevents outline when clicking on keyboard-focusable element
-            preventOutline(e.target || e.srcElement);
+            if (type === 'mousedown') // prevents outline when clicking on keyboard-focusable element
+            preventOutline(el);
             this._fireDOMEvent(e, type);
         },
         _mouseEvents: [
@@ -9039,7 +9260,7 @@ function fitBoundsPadding(e) {
             'mouseout',
             'contextmenu'
         ],
-        _fireDOMEvent: function(e, type, targets) {
+        _fireDOMEvent: function(e, type, canvasTargets) {
             if (e.type === 'click') {
                 // Fire a synthetic 'preclick' event which propagates up (mainly for closing popups).
                 // @event preclick: MouseEvent
@@ -9049,14 +9270,18 @@ function fitBoundsPadding(e) {
                 var synth = extend({
                 }, e);
                 synth.type = 'preclick';
-                this._fireDOMEvent(synth, synth.type, targets);
+                this._fireDOMEvent(synth, synth.type, canvasTargets);
             }
-            if (e._stopped) return;
             // Find the layer the event is propagating from and its parents.
-            targets = (targets || []).concat(this._findEventTargets(e, type));
+            var targets = this._findEventTargets(e, type);
+            if (canvasTargets) {
+                var filtered = []; // pick only targets with listeners
+                for(var i = 0; i < canvasTargets.length; i++)if (canvasTargets[i].listens(type, true)) filtered.push(canvasTargets[i]);
+                targets = filtered.concat(targets);
+            }
             if (!targets.length) return;
+            if (type === 'contextmenu') preventDefault(e);
             var target = targets[0];
-            if (type === 'contextmenu' && target.listens(type, true)) preventDefault(e);
             var data = {
                 originalEvent: e
             };
@@ -9066,7 +9291,7 @@ function fitBoundsPadding(e) {
                 data.layerPoint = this.containerPointToLayerPoint(data.containerPoint);
                 data.latlng = isMarker ? target.getLatLng() : this.layerPointToLatLng(data.layerPoint);
             }
-            for(var i = 0; i < targets.length; i++){
+            for(i = 0; i < targets.length; i++){
                 targets[i].fire(type, data, true);
                 if (data.originalEvent._stopped || targets[i].options.bubblingMouseEvents === false && indexOf(this._mouseEvents, type) !== -1) return;
             }
@@ -9137,10 +9362,7 @@ function fitBoundsPadding(e) {
             // If offset is less than a pixel, ignore.
             // This prevents unstable projections from getting into
             // an infinite loop of tiny offsets.
-            if (offset.round().equals([
-                0,
-                0
-            ])) return center;
+            if (Math.abs(offset.x) <= 1 && Math.abs(offset.y) <= 1) return center;
             return this.unproject(centerPoint.add(offset), zoom);
         },
         // adjust offset for view to get inside bounds
@@ -9158,7 +9380,7 @@ function fitBoundsPadding(e) {
             return left + right > 0 ? Math.round(left - right) / 2 : Math.max(0, Math.ceil(left)) - Math.max(0, Math.floor(right));
         },
         _limitZoom: function(zoom) {
-            var min = this.getMinZoom(), max = this.getMaxZoom(), snap = any3d ? this.options.zoomSnap : 1;
+            var min = this.getMinZoom(), max = this.getMaxZoom(), snap = Browser.any3d ? this.options.zoomSnap : 1;
             if (snap) zoom = Math.round(zoom / snap) * snap;
             return Math.max(min, Math.min(max, zoom));
         },
@@ -9215,7 +9437,7 @@ function fitBoundsPadding(e) {
             // don't animate if the zoom origin isn't within one screen from the current center, unless forced
             if (options.animate !== true && !this.getSize().contains(offset)) return false;
             requestAnimFrame(function() {
-                this._moveStart(true, false)._animateZoom(center, zoom, true);
+                this._moveStart(true, options.noMoveStart || false)._animateZoom(center, zoom, true);
             }, this);
             return true;
         },
@@ -9236,6 +9458,8 @@ function fitBoundsPadding(e) {
                 zoom: zoom,
                 noUpdate: noUpdate
             });
+            if (!this._tempFireZoomEvent) this._tempFireZoomEvent = this._zoom !== this._animateToZoom;
+            this._move(this._animateToCenter, this._animateToZoom, undefined, true);
             // Work around webkit not firing 'transitionend', see https://github.com/Leaflet/Leaflet/issues/3689, 2693
             setTimeout(bind(this._onZoomTransitionEnd, this), 250);
         },
@@ -9243,11 +9467,11 @@ function fitBoundsPadding(e) {
             if (!this._animatingZoom) return;
             if (this._mapPane) removeClass(this._mapPane, 'leaflet-zoom-anim');
             this._animatingZoom = false;
-            this._move(this._animateToCenter, this._animateToZoom);
-            // This anim frame should prevent an obscure iOS webkit tile loading race condition.
-            requestAnimFrame(function() {
-                this._moveEnd(true);
-            }, this);
+            this._move(this._animateToCenter, this._animateToZoom, undefined, true);
+            if (this._tempFireZoomEvent) this.fire('zoom');
+            delete this._tempFireZoomEvent;
+            this.fire('move');
+            this._moveEnd(true);
         }
     });
     // @section
@@ -9271,7 +9495,7 @@ function fitBoundsPadding(e) {
    * All other controls extend from this class.
    */ var Control = Class.extend({
         // @section
-        // @aka Control options
+        // @aka Control Options
         options: {
             // @option position: String = 'topright'
             // The position of the control (one of the map corners). Possible values are `'topleft'`,
@@ -9382,7 +9606,7 @@ function fitBoundsPadding(e) {
    * @aka L.Control.Layers
    * @inherits Control
    *
-   * The layers control gives users the ability to switch between different base layers and switch overlays on/off (check out the [detailed example](http://leafletjs.com/examples/layers-control/)). Extends `Control`.
+   * The layers control gives users the ability to switch between different base layers and switch overlays on/off (check out the [detailed example](https://leafletjs.com/examples/layers-control/)). Extends `Control`.
    *
    * @example
    *
@@ -9419,7 +9643,7 @@ function fitBoundsPadding(e) {
         // @aka Control.Layers options
         options: {
             // @option collapsed: Boolean = true
-            // If `true`, the control will be collapsed into an icon and expanded on mouse hover or touch.
+            // If `true`, the control will be collapsed into an icon and expanded on mouse hover, touch, or keyboard activation.
             collapsed: true,
             position: 'topright',
             // @option autoZIndex: Boolean = true
@@ -9448,6 +9672,7 @@ function fitBoundsPadding(e) {
             this._layers = [];
             this._lastZIndex = 0;
             this._handlingClick = false;
+            this._preventClick = false;
             for(var i in baseLayers)this._addLayer(baseLayers[i], i);
             for(i in overlays)this._addLayer(overlays[i], i, true);
         },
@@ -9516,18 +9741,25 @@ function fitBoundsPadding(e) {
             var section = this._section = create$1('section', className + '-list');
             if (collapsed) {
                 this._map.on('click', this.collapse, this);
-                if (!android) on(container, {
-                    mouseenter: this.expand,
+                on(container, {
+                    mouseenter: this._expandSafely,
                     mouseleave: this.collapse
                 }, this);
             }
             var link = this._layersLink = create$1('a', className + '-toggle', container);
             link.href = '#';
             link.title = 'Layers';
-            if (touch) {
-                on(link, 'click', stop);
-                on(link, 'click', this.expand, this);
-            } else on(link, 'focus', this.expand, this);
+            link.setAttribute('role', 'button');
+            on(link, {
+                keydown: function(e) {
+                    if (e.keyCode === 13) this._expandSafely();
+                },
+                // Certain screen readers intercept the key event and instead send a click event
+                click: function(e) {
+                    preventDefault(e);
+                    this._expandSafely();
+                }
+            }, this);
             if (!collapsed) this.expand();
             this._baseLayersList = create$1('div', className + '-base', section);
             this._separator = create$1('div', className + '-separator', section);
@@ -9591,7 +9823,7 @@ function fitBoundsPadding(e) {
             var type = obj.overlay ? e.type === 'add' ? 'overlayadd' : 'overlayremove' : e.type === 'add' ? 'baselayerchange' : null;
             if (type) this._map.fire(type, obj);
         },
-        // IE7 bugs out if you create a radio dynamically, so you have to do it this hacky way (see http://bit.ly/PqYLBe)
+        // IE7 bugs out if you create a radio dynamically, so you have to do it this hacky way (see https://stackoverflow.com/a/119079)
         _createRadioElement: function(name, checked) {
             var radioHtml = '<input type="radio" class="leaflet-control-layers-selector" name="' + name + '"' + (checked ? ' checked="checked"' : '') + '/>';
             var radioFragment = document.createElement('div');
@@ -9613,7 +9845,7 @@ function fitBoundsPadding(e) {
             name.innerHTML = ' ' + obj.name;
             // Helps from preventing layer control flicker when checkboxes are disabled
             // https://github.com/Leaflet/Leaflet/issues/2771
-            var holder = document.createElement('div');
+            var holder = document.createElement('span');
             label.appendChild(holder);
             holder.appendChild(input);
             holder.appendChild(name);
@@ -9623,6 +9855,8 @@ function fitBoundsPadding(e) {
             return label;
         },
         _onInputClick: function() {
+            // expanding the control on mobile with a click can cause adding a layer - we don't want this
+            if (this._preventClick) return;
             var inputs = this._layerControlInputs, input, layer;
             var addedLayers = [], removedLayers = [];
             this._handlingClick = true;
@@ -9650,13 +9884,16 @@ function fitBoundsPadding(e) {
             if (this._map && !this.options.collapsed) this.expand();
             return this;
         },
-        _expand: function() {
-            // Backward compatibility, remove me in 1.1.
-            return this.expand();
-        },
-        _collapse: function() {
-            // Backward compatibility, remove me in 1.1.
-            return this.collapse();
+        _expandSafely: function() {
+            var section = this._section;
+            this._preventClick = true;
+            on(section, 'click', preventDefault);
+            this.expand();
+            var that = this;
+            setTimeout(function() {
+                off(section, 'click', preventDefault);
+                that._preventClick = false;
+            });
         }
     });
     // @factory L.control.layers(baselayers?: Object, overlays?: Object, options?: Control.Layers options)
@@ -9675,15 +9912,15 @@ function fitBoundsPadding(e) {
         // @aka Control.Zoom options
         options: {
             position: 'topleft',
-            // @option zoomInText: String = '+'
+            // @option zoomInText: String = '<span aria-hidden="true">+</span>'
             // The text set on the 'zoom in' button.
-            zoomInText: '+',
+            zoomInText: '<span aria-hidden="true">+</span>',
             // @option zoomInTitle: String = 'Zoom in'
             // The title set on the 'zoom in' button.
             zoomInTitle: 'Zoom in',
-            // @option zoomOutText: String = '&#x2212;'
+            // @option zoomOutText: String = '<span aria-hidden="true">&#x2212;</span>'
             // The text set on the 'zoom out' button.
-            zoomOutText: '&#x2212;',
+            zoomOutText: '<span aria-hidden="true">&#x2212;</span>',
             // @option zoomOutTitle: String = 'Zoom out'
             // The title set on the 'zoom out' button.
             zoomOutTitle: 'Zoom out'
@@ -9734,8 +9971,16 @@ function fitBoundsPadding(e) {
             var map = this._map, className = 'leaflet-disabled';
             removeClass(this._zoomInButton, className);
             removeClass(this._zoomOutButton, className);
-            if (this._disabled || map._zoom === map.getMinZoom()) addClass(this._zoomOutButton, className);
-            if (this._disabled || map._zoom === map.getMaxZoom()) addClass(this._zoomInButton, className);
+            this._zoomInButton.setAttribute('aria-disabled', 'false');
+            this._zoomOutButton.setAttribute('aria-disabled', 'false');
+            if (this._disabled || map._zoom === map.getMinZoom()) {
+                addClass(this._zoomOutButton, className);
+                this._zoomOutButton.setAttribute('aria-disabled', 'true');
+            }
+            if (this._disabled || map._zoom === map.getMaxZoom()) {
+                addClass(this._zoomInButton, className);
+                this._zoomInButton.setAttribute('aria-disabled', 'true');
+            }
         }
     });
     // @namespace Map
@@ -9847,6 +10092,7 @@ function fitBoundsPadding(e) {
     var scale = function(options) {
         return new Scale(options);
     };
+    var ukrainianFlag = '<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="12" height="8" viewBox="0 0 12 8" class="leaflet-attribution-flag"><path fill="#4C7BE1" d="M0 0h12v4H0z"/><path fill="#FFD500" d="M0 4h12v3H0z"/><path fill="#E0BC00" d="M0 7h12v1H0z"/></svg>';
     /*
    * @class Control.Attribution
    * @aka L.Control.Attribution
@@ -9858,9 +10104,9 @@ function fitBoundsPadding(e) {
         // @aka Control.Attribution options
         options: {
             position: 'bottomright',
-            // @option prefix: String = 'Leaflet'
+            // @option prefix: String|false = 'Leaflet'
             // The HTML text shown before the attributions. Pass `false` to disable.
-            prefix: '<a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a>'
+            prefix: '<a href="https://leafletjs.com" title="A JavaScript library for interactive maps">' + (Browser.inlineSvg ? ukrainianFlag + ' ' : '') + 'Leaflet</a>'
         },
         initialize: function(options) {
             setOptions(this, options);
@@ -9874,17 +10120,29 @@ function fitBoundsPadding(e) {
             // TODO ugly, refactor
             for(var i in map._layers)if (map._layers[i].getAttribution) this.addAttribution(map._layers[i].getAttribution());
             this._update();
+            map.on('layeradd', this._addAttribution, this);
             return this._container;
         },
-        // @method setPrefix(prefix: String): this
-        // Sets the text before the attributions.
+        onRemove: function(map) {
+            map.off('layeradd', this._addAttribution, this);
+        },
+        _addAttribution: function(ev) {
+            if (ev.layer.getAttribution) {
+                this.addAttribution(ev.layer.getAttribution());
+                ev.layer.once('remove', function() {
+                    this.removeAttribution(ev.layer.getAttribution());
+                }, this);
+            }
+        },
+        // @method setPrefix(prefix: String|false): this
+        // The HTML text shown before the attributions. Pass `false` to disable.
         setPrefix: function(prefix) {
             this.options.prefix = prefix;
             this._update();
             return this;
         },
         // @method addAttribution(text: String): this
-        // Adds an attribution text (e.g. `'Vector data &copy; Mapbox'`).
+        // Adds an attribution text (e.g. `'&copy; OpenStreetMap contributors'`).
         addAttribution: function(text) {
             if (!text) return this;
             if (!this._attributions[text]) this._attributions[text] = 0;
@@ -9909,7 +10167,7 @@ function fitBoundsPadding(e) {
             var prefixAndAttribs = [];
             if (this.options.prefix) prefixAndAttribs.push(this.options.prefix);
             if (attribs.length) prefixAndAttribs.push(attribs.join(', '));
-            this._container.innerHTML = prefixAndAttribs.join(' | ');
+            this._container.innerHTML = prefixAndAttribs.join(' <span aria-hidden="true">|</span> ');
         }
     });
     // @namespace Map
@@ -9992,19 +10250,7 @@ function fitBoundsPadding(e) {
    * var draggable = new L.Draggable(elementToDrag);
    * draggable.enable();
    * ```
-   */ var START = touch ? 'touchstart mousedown' : 'mousedown';
-    var END = {
-        mousedown: 'mouseup',
-        touchstart: 'touchend',
-        pointerdown: 'touchend',
-        MSPointerDown: 'touchend'
-    };
-    var MOVE = {
-        mousedown: 'mousemove',
-        touchstart: 'touchmove',
-        pointerdown: 'touchmove',
-        MSPointerDown: 'touchmove'
-    };
+   */ var START = Browser.touch ? 'touchstart mousedown' : 'mousedown';
     var Draggable = Evented.extend({
         options: {
             // @section
@@ -10016,11 +10262,11 @@ function fitBoundsPadding(e) {
         },
         // @constructor L.Draggable(el: HTMLElement, dragHandle?: HTMLElement, preventOutline?: Boolean, options?: Draggable options)
         // Creates a `Draggable` object for moving `el` when you start dragging the `dragHandle` element (equals `el` itself by default).
-        initialize: function(element, dragStartTarget, preventOutline$$1, options) {
+        initialize: function(element, dragStartTarget, preventOutline1, options) {
             setOptions(this, options);
             this._element = element;
             this._dragStartTarget = dragStartTarget || element;
-            this._preventOutline = preventOutline$$1;
+            this._preventOutline = preventOutline1;
         },
         // @method enable()
         // Enables the dragging ability
@@ -10035,20 +10281,22 @@ function fitBoundsPadding(e) {
             if (!this._enabled) return;
             // If we're currently dragging this draggable,
             // disabling it counts as first ending the drag.
-            if (Draggable._dragging === this) this.finishDrag();
+            if (Draggable._dragging === this) this.finishDrag(true);
             off(this._dragStartTarget, START, this._onDown, this);
             this._enabled = false;
             this._moved = false;
         },
         _onDown: function(e) {
-            // Ignore simulated events, since we handle both touch and
-            // mouse explicitly; otherwise we risk getting duplicates of
-            // touch events, see #4315.
-            // Also ignore the event if disabled; this happens in IE11
+            // Ignore the event if disabled; this happens in IE11
             // under some circumstances, see #3666.
-            if (e._simulated || !this._enabled) return;
+            if (!this._enabled) return;
             this._moved = false;
             if (hasClass(this._element, 'leaflet-zoom-anim')) return;
+            if (e.touches && e.touches.length !== 1) {
+                // Finish dragging to avoid conflict with touchZoom
+                if (Draggable._dragging === this) this.finishDrag();
+                return;
+            }
             if (Draggable._dragging || e.shiftKey || e.which !== 1 && e.button !== 1 && !e.touches) return;
             Draggable._dragging = this; // Prevent dragging multiple objects at once.
             if (this._preventOutline) preventOutline(this._element);
@@ -10060,18 +10308,17 @@ function fitBoundsPadding(e) {
             this.fire('down');
             var first = e.touches ? e.touches[0] : e, sizedParent = getSizedParentNode(this._element);
             this._startPoint = new Point(first.clientX, first.clientY);
+            this._startPos = getPosition(this._element);
             // Cache the scale, so that we can continuously compensate for it during drag (_onMove).
             this._parentScale = getScale(sizedParent);
-            on(document, MOVE[e.type], this._onMove, this);
-            on(document, END[e.type], this._onUp, this);
+            var mouseevent = e.type === 'mousedown';
+            on(document, mouseevent ? 'mousemove' : 'touchmove', this._onMove, this);
+            on(document, mouseevent ? 'mouseup' : 'touchend touchcancel', this._onUp, this);
         },
         _onMove: function(e) {
-            // Ignore simulated events, since we handle both touch and
-            // mouse explicitly; otherwise we risk getting duplicates of
-            // touch events, see #4315.
-            // Also ignore the event if disabled; this happens in IE11
+            // Ignore the event if disabled; this happens in IE11
             // under some circumstances, see #3666.
-            if (e._simulated || !this._enabled) return;
+            if (!this._enabled) return;
             if (e.touches && e.touches.length > 1) {
                 this._moved = true;
                 return;
@@ -10090,7 +10337,6 @@ function fitBoundsPadding(e) {
                 // Fired when a drag starts
                 this.fire('dragstart');
                 this._moved = true;
-                this._startPos = getPosition(this._element).subtract(offset);
                 addClass(document.body, 'leaflet-dragging');
                 this._lastTarget = e.target || e.srcElement;
                 // IE and Edge do not give the <use> element, so fetch it
@@ -10100,9 +10346,8 @@ function fitBoundsPadding(e) {
             }
             this._newPos = this._startPos.add(offset);
             this._moving = true;
-            cancelAnimFrame(this._animRequest);
             this._lastEvent = e;
-            this._animRequest = requestAnimFrame(this._updatePosition, this, true);
+            this._updatePosition();
         },
         _updatePosition: function() {
             var e = {
@@ -10117,40 +10362,148 @@ function fitBoundsPadding(e) {
             // Fired continuously during dragging.
             this.fire('drag', e);
         },
-        _onUp: function(e) {
-            // Ignore simulated events, since we handle both touch and
-            // mouse explicitly; otherwise we risk getting duplicates of
-            // touch events, see #4315.
-            // Also ignore the event if disabled; this happens in IE11
+        _onUp: function() {
+            // Ignore the event if disabled; this happens in IE11
             // under some circumstances, see #3666.
-            if (e._simulated || !this._enabled) return;
+            if (!this._enabled) return;
             this.finishDrag();
         },
-        finishDrag: function() {
+        finishDrag: function(noInertia) {
             removeClass(document.body, 'leaflet-dragging');
             if (this._lastTarget) {
                 removeClass(this._lastTarget, 'leaflet-drag-target');
                 this._lastTarget = null;
             }
-            for(var i in MOVE){
-                off(document, MOVE[i], this._onMove, this);
-                off(document, END[i], this._onUp, this);
-            }
+            off(document, 'mousemove touchmove', this._onMove, this);
+            off(document, 'mouseup touchend touchcancel', this._onUp, this);
             enableImageDrag();
             enableTextSelection();
-            if (this._moved && this._moving) {
-                // ensure drag is not fired after dragend
-                cancelAnimFrame(this._animRequest);
-                // @event dragend: DragEndEvent
-                // Fired when the drag ends.
-                this.fire('dragend', {
-                    distance: this._newPos.distanceTo(this._startPos)
-                });
-            }
+            var fireDragend = this._moved && this._moving;
             this._moving = false;
             Draggable._dragging = false;
+            if (fireDragend) // @event dragend: DragEndEvent
+            // Fired when the drag ends.
+            this.fire('dragend', {
+                noInertia: noInertia,
+                distance: this._newPos.distanceTo(this._startPos)
+            });
         }
     });
+    /*
+   * @namespace PolyUtil
+   * Various utility functions for polygon geometries.
+   */ /* @function clipPolygon(points: Point[], bounds: Bounds, round?: Boolean): Point[]
+   * Clips the polygon geometry defined by the given `points` by the given bounds (using the [Sutherland-Hodgman algorithm](https://en.wikipedia.org/wiki/Sutherland%E2%80%93Hodgman_algorithm)).
+   * Used by Leaflet to only show polygon points that are on the screen or near, increasing
+   * performance. Note that polygon points needs different algorithm for clipping
+   * than polyline, so there's a separate method for it.
+   */ function clipPolygon(points, bounds, round) {
+        var clippedPoints, edges = [
+            1,
+            4,
+            2,
+            8
+        ], i, j, k, a, b, len, edge1, p;
+        for(i = 0, len = points.length; i < len; i++)points[i]._code = _getBitCode(points[i], bounds);
+        // for each edge (left, bottom, right, top)
+        for(k = 0; k < 4; k++){
+            edge1 = edges[k];
+            clippedPoints = [];
+            for(i = 0, len = points.length, j = len - 1; i < len; j = i++){
+                a = points[i];
+                b = points[j];
+                // if a is inside the clip window
+                if (!(a._code & edge1)) {
+                    // if b is outside the clip window (a->b goes out of screen)
+                    if (b._code & edge1) {
+                        p = _getEdgeIntersection(b, a, edge1, bounds, round);
+                        p._code = _getBitCode(p, bounds);
+                        clippedPoints.push(p);
+                    }
+                    clippedPoints.push(a);
+                // else if b is inside the clip window (a->b enters the screen)
+                } else if (!(b._code & edge1)) {
+                    p = _getEdgeIntersection(b, a, edge1, bounds, round);
+                    p._code = _getBitCode(p, bounds);
+                    clippedPoints.push(p);
+                }
+            }
+            points = clippedPoints;
+        }
+        return points;
+    }
+    /* @function polygonCenter(latlngs: LatLng[], crs: CRS): LatLng
+   * Returns the center ([centroid](http://en.wikipedia.org/wiki/Centroid)) of the passed LatLngs (first ring) from a polygon.
+   */ function polygonCenter(latlngs, crs) {
+        var i, j, p1, p2, f, area, x, y, center;
+        if (!latlngs || latlngs.length === 0) throw new Error('latlngs not passed');
+        if (!isFlat(latlngs)) {
+            console.warn('latlngs are not flat! Only the first ring will be used');
+            latlngs = latlngs[0];
+        }
+        var centroidLatLng = toLatLng([
+            0,
+            0
+        ]);
+        var bounds = toLatLngBounds(latlngs);
+        var areaBounds = bounds.getNorthWest().distanceTo(bounds.getSouthWest()) * bounds.getNorthEast().distanceTo(bounds.getNorthWest());
+        // tests showed that below 1700 rounding errors are happening
+        if (areaBounds < 1700) // getting a inexact center, to move the latlngs near to [0, 0] to prevent rounding errors
+        centroidLatLng = centroid(latlngs);
+        var len = latlngs.length;
+        var points = [];
+        for(i = 0; i < len; i++){
+            var latlng = toLatLng(latlngs[i]);
+            points.push(crs.project(toLatLng([
+                latlng.lat - centroidLatLng.lat,
+                latlng.lng - centroidLatLng.lng
+            ])));
+        }
+        area = x = y = 0;
+        // polygon centroid algorithm;
+        for(i = 0, j = len - 1; i < len; j = i++){
+            p1 = points[i];
+            p2 = points[j];
+            f = p1.y * p2.x - p2.y * p1.x;
+            x += (p1.x + p2.x) * f;
+            y += (p1.y + p2.y) * f;
+            area += f * 3;
+        }
+        if (area === 0) // Polygon is so small that all points are on same pixel.
+        center = points[0];
+        else center = [
+            x / area,
+            y / area
+        ];
+        var latlngCenter = crs.unproject(toPoint(center));
+        return toLatLng([
+            latlngCenter.lat + centroidLatLng.lat,
+            latlngCenter.lng + centroidLatLng.lng
+        ]);
+    }
+    /* @function centroid(latlngs: LatLng[]): LatLng
+   * Returns the 'center of mass' of the passed LatLngs.
+   */ function centroid(coords) {
+        var latSum = 0;
+        var lngSum = 0;
+        var len = 0;
+        for(var i = 0; i < coords.length; i++){
+            var latlng = toLatLng(coords[i]);
+            latSum += latlng.lat;
+            lngSum += latlng.lng;
+            len++;
+        }
+        return toLatLng([
+            latSum / len,
+            lngSum / len
+        ]);
+    }
+    var PolyUtil = {
+        __proto__: null,
+        clipPolygon: clipPolygon,
+        polygonCenter: polygonCenter,
+        centroid: centroid
+    };
     /*
    * @namespace LineUtil
    *
@@ -10160,11 +10513,11 @@ function fitBoundsPadding(e) {
     // @function simplify(points: Point[], tolerance: Number): Point[]
     // Dramatically reduces the number of points in a polyline while retaining
     // its shape and returns a new array of simplified points, using the
-    // [Douglas-Peucker algorithm](http://en.wikipedia.org/wiki/Douglas-Peucker_algorithm).
+    // [Ramer-Douglas-Peucker algorithm](https://en.wikipedia.org/wiki/Ramer-Douglas-Peucker_algorithm).
     // Used for a huge performance boost when processing/displaying Leaflet polylines for
     // each zoom level and also reducing visual noise. tolerance affects the amount of
     // simplification (lesser value means higher quality but slower and with more points).
-    // Also released as a separated micro-library [Simplify.js](http://mourner.github.com/simplify-js/).
+    // Also released as a separated micro-library [Simplify.js](https://mourner.github.io/simplify-js/).
     function simplify(points, tolerance) {
         if (!tolerance || !points.length) return points.slice();
         var sqTolerance = tolerance * tolerance;
@@ -10184,7 +10537,7 @@ function fitBoundsPadding(e) {
     function closestPointOnSegment(p, p1, p2) {
         return _sqClosestPointOnSegment(p, p1, p2);
     }
-    // Douglas-Peucker simplification, see http://en.wikipedia.org/wiki/Douglas-Peucker_algorithm
+    // Ramer-Douglas-Peucker simplification, see https://en.wikipedia.org/wiki/Ramer-Douglas-Peucker_algorithm
     function _simplifyDP(points, sqTolerance) {
         var len = points.length, ArrayConstructor = typeof Uint8Array !== "undefined" ? Uint8Array : Array, markers = new ArrayConstructor(len);
         markers[0] = markers[len - 1] = 1;
@@ -10307,7 +10660,58 @@ function fitBoundsPadding(e) {
         console.warn('Deprecated use of _flat, please use L.LineUtil.isFlat instead.');
         return isFlat(latlngs);
     }
+    /* @function polylineCenter(latlngs: LatLng[], crs: CRS): LatLng
+   * Returns the center ([centroid](http://en.wikipedia.org/wiki/Centroid)) of the passed LatLngs (first ring) from a polyline.
+   */ function polylineCenter(latlngs, crs) {
+        var i, halfDist, segDist, dist, p1, p2, ratio, center;
+        if (!latlngs || latlngs.length === 0) throw new Error('latlngs not passed');
+        if (!isFlat(latlngs)) {
+            console.warn('latlngs are not flat! Only the first ring will be used');
+            latlngs = latlngs[0];
+        }
+        var centroidLatLng = toLatLng([
+            0,
+            0
+        ]);
+        var bounds = toLatLngBounds(latlngs);
+        var areaBounds = bounds.getNorthWest().distanceTo(bounds.getSouthWest()) * bounds.getNorthEast().distanceTo(bounds.getNorthWest());
+        // tests showed that below 1700 rounding errors are happening
+        if (areaBounds < 1700) // getting a inexact center, to move the latlngs near to [0, 0] to prevent rounding errors
+        centroidLatLng = centroid(latlngs);
+        var len = latlngs.length;
+        var points = [];
+        for(i = 0; i < len; i++){
+            var latlng = toLatLng(latlngs[i]);
+            points.push(crs.project(toLatLng([
+                latlng.lat - centroidLatLng.lat,
+                latlng.lng - centroidLatLng.lng
+            ])));
+        }
+        for(i = 0, halfDist = 0; i < len - 1; i++)halfDist += points[i].distanceTo(points[i + 1]) / 2;
+        // The line is so small in the current view that all points are on the same pixel.
+        if (halfDist === 0) center = points[0];
+        else for(i = 0, dist = 0; i < len - 1; i++){
+            p1 = points[i];
+            p2 = points[i + 1];
+            segDist = p1.distanceTo(p2);
+            dist += segDist;
+            if (dist > halfDist) {
+                ratio = (dist - halfDist) / segDist;
+                center = [
+                    p2.x - ratio * (p2.x - p1.x),
+                    p2.y - ratio * (p2.y - p1.y)
+                ];
+                break;
+            }
+        }
+        var latlngCenter = crs.unproject(toPoint(center));
+        return toLatLng([
+            latlngCenter.lat + centroidLatLng.lat,
+            latlngCenter.lng + centroidLatLng.lng
+        ]);
+    }
     var LineUtil = {
+        __proto__: null,
         simplify: simplify,
         pointToSegmentDistance: pointToSegmentDistance,
         closestPointOnSegment: closestPointOnSegment,
@@ -10316,53 +10720,8 @@ function fitBoundsPadding(e) {
         _getBitCode: _getBitCode,
         _sqClosestPointOnSegment: _sqClosestPointOnSegment,
         isFlat: isFlat,
-        _flat: _flat
-    };
-    /*
-   * @namespace PolyUtil
-   * Various utility functions for polygon geometries.
-   */ /* @function clipPolygon(points: Point[], bounds: Bounds, round?: Boolean): Point[]
-   * Clips the polygon geometry defined by the given `points` by the given bounds (using the [Sutherland-Hodgman algorithm](https://en.wikipedia.org/wiki/Sutherland%E2%80%93Hodgman_algorithm)).
-   * Used by Leaflet to only show polygon points that are on the screen or near, increasing
-   * performance. Note that polygon points needs different algorithm for clipping
-   * than polyline, so there's a separate method for it.
-   */ function clipPolygon(points, bounds, round) {
-        var clippedPoints, edges = [
-            1,
-            4,
-            2,
-            8
-        ], i, j, k, a, b, len, edge1, p;
-        for(i = 0, len = points.length; i < len; i++)points[i]._code = _getBitCode(points[i], bounds);
-        // for each edge (left, bottom, right, top)
-        for(k = 0; k < 4; k++){
-            edge1 = edges[k];
-            clippedPoints = [];
-            for(i = 0, len = points.length, j = len - 1; i < len; j = i++){
-                a = points[i];
-                b = points[j];
-                // if a is inside the clip window
-                if (!(a._code & edge1)) {
-                    // if b is outside the clip window (a->b goes out of screen)
-                    if (b._code & edge1) {
-                        p = _getEdgeIntersection(b, a, edge1, bounds, round);
-                        p._code = _getBitCode(p, bounds);
-                        clippedPoints.push(p);
-                    }
-                    clippedPoints.push(a);
-                // else if b is inside the clip window (a->b enters the screen)
-                } else if (!(b._code & edge1)) {
-                    p = _getEdgeIntersection(b, a, edge1, bounds, round);
-                    p._code = _getBitCode(p, bounds);
-                    clippedPoints.push(p);
-                }
-            }
-            points = clippedPoints;
-        }
-        return points;
-    }
-    var PolyUtil = {
-        clipPolygon: clipPolygon
+        _flat: _flat,
+        polylineCenter: polylineCenter
     };
     /*
    * @namespace Projection
@@ -10426,7 +10785,7 @@ function fitBoundsPadding(e) {
    * @class Projection
 
    * An object with methods for projecting geographical coordinates of the world onto
-   * a flat surface (and back). See [Map projection](http://en.wikipedia.org/wiki/Map_projection).
+   * a flat surface (and back). See [Map projection](https://en.wikipedia.org/wiki/Map_projection).
 
    * @property bounds: Bounds
    * The bounds (specified in CRS units) where the projection is valid
@@ -10444,6 +10803,7 @@ function fitBoundsPadding(e) {
    * and methods can't be added to them with the `include` function.
 
    */ var index = {
+        __proto__: null,
         LonLat: LonLat,
         Mercator: Mercator,
         SphericalMercator: SphericalMercator
@@ -10598,7 +10958,6 @@ function fitBoundsPadding(e) {
                 }, this);
             }
             this.onAdd(map);
-            if (this.getAttribution && map.attributionControl) map.attributionControl.addAttribution(this.getAttribution());
             this.fire('add');
             map.fire('layeradd', {
                 layer: this
@@ -10653,7 +11012,6 @@ function fitBoundsPadding(e) {
             var id = stamp(layer);
             if (!this._layers[id]) return this;
             if (this._loaded) layer.onRemove(this);
-            if (layer.getAttribution && this.attributionControl) this.attributionControl.removeAttribution(layer.getAttribution());
             delete this._layers[id];
             if (this._loaded) {
                 this.fire('layerremove', {
@@ -10667,7 +11025,7 @@ function fitBoundsPadding(e) {
         // @method hasLayer(layer: Layer): Boolean
         // Returns `true` if the given layer is currently added to the map
         hasLayer: function(layer) {
-            return !!layer && stamp(layer) in this._layers;
+            return stamp(layer) in this._layers;
         },
         /* @method eachLayer(fn: Function, context?: Object): this
   	 * Iterates over the layers of the map, optionally specifying context of the iterator function.
@@ -10687,7 +11045,7 @@ function fitBoundsPadding(e) {
             for(var i = 0, len = layers1.length; i < len; i++)this.addLayer(layers1[i]);
         },
         _addZoomLimit: function(layer) {
-            if (isNaN(layer.options.maxZoom) || !isNaN(layer.options.minZoom)) {
+            if (!isNaN(layer.options.maxZoom) || !isNaN(layer.options.minZoom)) {
                 this._zoomBoundLayers[stamp(layer)] = layer;
                 this._updateZoomLevels();
             }
@@ -10720,7 +11078,7 @@ function fitBoundsPadding(e) {
     /*
    * @class LayerGroup
    * @aka L.LayerGroup
-   * @inherits Layer
+   * @inherits Interactive layer
    *
    * Used to group several layers and handle them as one. If you add it to the map,
    * any layers added or removed from the group will be added/removed on the map as
@@ -10766,7 +11124,6 @@ function fitBoundsPadding(e) {
         // @method hasLayer(id: Number): Boolean
         // Returns `true` if the given internal ID is currently added to the group.
         hasLayer: function(layer) {
-            if (!layer) return false;
             var layerId = typeof layer === 'number' ? layer : this.getLayerId(layer);
             return layerId in this._layers;
         },
@@ -10876,8 +11233,8 @@ function fitBoundsPadding(e) {
         },
         // @method setStyle(style: Path options): this
         // Sets the given path options to each layer of the group that has a `setStyle` method.
-        setStyle: function(style) {
-            return this.invoke('setStyle', style);
+        setStyle: function(style2) {
+            return this.invoke('setStyle', style2);
         },
         // @method bringToFront(): this
         // Brings the layer group to the top of all other layers
@@ -10978,7 +11335,12 @@ function fitBoundsPadding(e) {
             tooltipAnchor: [
                 0,
                 0
-            ]
+            ],
+            // @option crossOrigin: Boolean|String = false
+            // Whether the crossOrigin attribute will be added to the tiles.
+            // If a String is provided, all tiles will have their crossOrigin attribute set to the String provided. This is needed if you want to access tile pixel data.
+            // Refer to [CORS Settings](https://developer.mozilla.org/en-US/docs/Web/HTML/CORS_settings_attributes) for valid String values.
+            crossOrigin: false
         },
         initialize: function(options) {
             setOptions(this, options);
@@ -11002,6 +11364,7 @@ function fitBoundsPadding(e) {
             }
             var img = this._createImg(src, oldIcon && oldIcon.tagName === 'IMG' ? oldIcon : null);
             this._setIconStyles(img, name);
+            if (this.options.crossOrigin || this.options.crossOrigin === '') img.crossOrigin = this.options.crossOrigin === true ? '' : this.options.crossOrigin;
             return img;
         },
         _setIconStyles: function(img, name) {
@@ -11028,7 +11391,7 @@ function fitBoundsPadding(e) {
             return el;
         },
         _getIconUrl: function(name) {
-            return retina && this.options[name + 'RetinaUrl'] || this.options[name + 'Url'];
+            return Browser.retina && this.options[name + 'RetinaUrl'] || this.options[name + 'Url'];
         }
     });
     // @factory L.icon(options: Icon options)
@@ -11077,20 +11440,30 @@ function fitBoundsPadding(e) {
             ]
         },
         _getIconUrl: function(name) {
-            if (!IconDefault.imagePath) IconDefault.imagePath = this._detectIconPath();
+            if (typeof IconDefault.imagePath !== 'string') IconDefault.imagePath = this._detectIconPath();
             // @option imagePath: String
             // `Icon.Default` will try to auto-detect the location of the
             // blue icon images. If you are placing these images in a non-standard
             // way, set this option to point to the right path.
             return (this.options.imagePath || IconDefault.imagePath) + Icon.prototype._getIconUrl.call(this, name);
         },
+        _stripUrl: function(path) {
+            var strip = function(str, re, idx) {
+                var match = re.exec(str);
+                return match && match[idx];
+            };
+            path = strip(path, /^url\((['"])?(.+)\1\)$/, 2);
+            return path && strip(path, /^(.*)marker-icon\.png$/, 1);
+        },
         _detectIconPath: function() {
             var el = create$1('div', 'leaflet-default-icon-path', document.body);
             var path = getStyle(el, 'background-image') || getStyle(el, 'backgroundImage'); // IE8
             document.body.removeChild(el);
-            if (path === null || path.indexOf('url') !== 0) path = '';
-            else path = path.replace(/^url\(["']?/, '').replace(/marker-icon\.png["']?\)$/, '');
-            return path;
+            path = this._stripUrl(path);
+            if (path) return path;
+            var link = document.querySelector('link[href$="leaflet.css"]');
+            if (!link) return '';
+            return link.href.substring(0, link.href.length - 11 - 1);
         }
     });
     /*
@@ -11214,10 +11587,12 @@ function fitBoundsPadding(e) {
             keyboard: true,
             // @option title: String = ''
             // Text for the browser tooltip that appear on marker hover (no tooltip by default).
+            // [Useful for accessibility](https://leafletjs.com/examples/accessibility/#markers-must-be-labelled).
             title: '',
-            // @option alt: String = ''
-            // Text for the `alt` attribute of the icon image (useful for accessibility).
-            alt: '',
+            // @option alt: String = 'Marker'
+            // Text for the `alt` attribute of the icon image.
+            // [Useful for accessibility](https://leafletjs.com/examples/accessibility/#markers-must-be-labelled).
+            alt: 'Marker',
             // @option zIndexOffset: Number = 0
             // By default, marker images zIndex is set automatically based on its latitude. Use this option if you want to put the marker on top of all others (or below), specifying a high value like `1000` (or high negative value, respectively).
             zIndexOffset: 0,
@@ -11240,6 +11615,11 @@ function fitBoundsPadding(e) {
             // When `true`, a mouse event on this marker will trigger the same event on the map
             // (unless [`L.DomEvent.stopPropagation`](#domevent-stoppropagation) is used).
             bubblingMouseEvents: false,
+            // @option autoPanOnFocus: Boolean = true
+            // When `true`, the map will pan whenever the marker is focused (via
+            // e.g. pressing `tab` on the keyboard) to ensure the marker is
+            // visible within the map's bounds
+            autoPanOnFocus: true,
             // @section Draggable marker options
             // @option draggable: Boolean = false
             // Whether the marker is draggable with mouse/touch or not.
@@ -11348,12 +11728,16 @@ function fitBoundsPadding(e) {
                 if (icon1.tagName === 'IMG') icon1.alt = options.alt || '';
             }
             addClass(icon1, classToAdd);
-            if (options.keyboard) icon1.tabIndex = '0';
+            if (options.keyboard) {
+                icon1.tabIndex = '0';
+                icon1.setAttribute('role', 'button');
+            }
             this._icon = icon1;
             if (options.riseOnHover) this.on({
                 mouseover: this._bringToFront,
                 mouseout: this._resetZIndex
             });
+            if (this.options.autoPanOnFocus) on(icon1, 'focus', this._panOnFocus, this);
             var newShadow = options.icon.createShadow(this._shadow), addShadow = false;
             if (newShadow !== this._shadow) {
                 this._removeShadow();
@@ -11374,6 +11758,7 @@ function fitBoundsPadding(e) {
                 mouseover: this._bringToFront,
                 mouseout: this._resetZIndex
             });
+            if (this.options.autoPanOnFocus) off(this._icon, 'focus', this._panOnFocus, this);
             remove(this._icon);
             this.removeInteractiveTarget(this._icon);
             this._icon = null;
@@ -11426,6 +11811,17 @@ function fitBoundsPadding(e) {
         },
         _resetZIndex: function() {
             this._updateZIndex(0);
+        },
+        _panOnFocus: function() {
+            var map = this._map;
+            if (!map) return;
+            var iconOpts = this.options.icon.options;
+            var size = iconOpts.iconSize ? toPoint(iconOpts.iconSize) : toPoint(0, 0);
+            var anchor = iconOpts.iconAnchor ? toPoint(iconOpts.iconAnchor) : toPoint(0, 0);
+            map.panInside(this._latlng, {
+                paddingTopLeft: anchor,
+                paddingBottomRight: size.subtract(anchor)
+            });
         },
         _getPopupAnchor: function() {
             return this.options.icon.options.popupAnchor;
@@ -11516,11 +11912,11 @@ function fitBoundsPadding(e) {
         },
         // @method setStyle(style: Path options): this
         // Changes the appearance of a Path based on the options in the `Path options` object.
-        setStyle: function(style) {
-            setOptions(this, style);
+        setStyle: function(style2) {
+            setOptions(this, style2);
             if (this._renderer) {
                 this._renderer._updateStyle(this);
-                if (this.options.stroke && style && Object.prototype.hasOwnProperty.call(style, 'weight')) this._updateBounds();
+                if (this.options.stroke && style2 && Object.prototype.hasOwnProperty.call(style2, 'weight')) this._updateBounds();
             }
             return this;
         },
@@ -11546,7 +11942,7 @@ function fitBoundsPadding(e) {
         },
         _clickTolerance: function() {
             // used when doing hit detection for Canvas layers
-            return (this.options.stroke ? this.options.weight / 2 : 0) + this._renderer.options.tolerance;
+            return (this.options.stroke ? this.options.weight / 2 : 0) + (this._renderer.options.tolerance || 0);
         }
     });
     /*
@@ -11810,29 +12206,11 @@ function fitBoundsPadding(e) {
             return minPoint;
         },
         // @method getCenter(): LatLng
-        // Returns the center ([centroid](http://en.wikipedia.org/wiki/Centroid)) of the polyline.
+        // Returns the center ([centroid](https://en.wikipedia.org/wiki/Centroid)) of the polyline.
         getCenter: function() {
             // throws error when not yet added to map as this center calculation requires projected coordinates
             if (!this._map) throw new Error('Must add layer to map before using getCenter()');
-            var i, halfDist, segDist, dist, p1, p2, ratio, points = this._rings[0], len = points.length;
-            if (!len) return null;
-            // polyline centroid algorithm; only uses the first ring if there are multiple
-            for(i = 0, halfDist = 0; i < len - 1; i++)halfDist += points[i].distanceTo(points[i + 1]) / 2;
-            // The line is so small in the current view that all points are on the same pixel.
-            if (halfDist === 0) return this._map.layerPointToLatLng(points[0]);
-            for(i = 0, dist = 0; i < len - 1; i++){
-                p1 = points[i];
-                p2 = points[i + 1];
-                segDist = p1.distanceTo(p2);
-                dist += segDist;
-                if (dist > halfDist) {
-                    ratio = (dist - halfDist) / segDist;
-                    return this._map.layerPointToLatLng([
-                        p2.x - ratio * (p2.x - p1.x),
-                        p2.y - ratio * (p2.y - p1.y)
-                    ]);
-                }
-            }
+            return polylineCenter(this._defaultShape(), this._map.options.crs);
         },
         // @method getBounds(): LatLngBounds
         // Returns the `LatLngBounds` of the path.
@@ -11877,6 +12255,7 @@ function fitBoundsPadding(e) {
         },
         _updateBounds: function() {
             var w = this._clickTolerance(), p = new Point(w, w);
+            if (!this._rawPxBounds) return;
             this._pxBounds = new Bounds([
                 this._rawPxBounds.min.subtract(p),
                 this._rawPxBounds.max.add(p)
@@ -12009,28 +12388,12 @@ function fitBoundsPadding(e) {
         isEmpty: function() {
             return !this._latlngs.length || !this._latlngs[0].length;
         },
+        // @method getCenter(): LatLng
+        // Returns the center ([centroid](http://en.wikipedia.org/wiki/Centroid)) of the Polygon.
         getCenter: function() {
             // throws error when not yet added to map as this center calculation requires projected coordinates
             if (!this._map) throw new Error('Must add layer to map before using getCenter()');
-            var i, j, p1, p2, f, area, x, y, center, points = this._rings[0], len = points.length;
-            if (!len) return null;
-            // polygon centroid algorithm; only uses the first ring if there are multiple
-            area = x = y = 0;
-            for(i = 0, j = len - 1; i < len; j = i++){
-                p1 = points[i];
-                p2 = points[j];
-                f = p1.y * p2.x - p2.y * p1.x;
-                x += (p1.x + p2.x) * f;
-                y += (p1.y + p2.y) * f;
-                area += f * 3;
-            }
-            if (area === 0) // Polygon is so small that all points are on same pixel.
-            center = points[0];
-            else center = [
-                x / area,
-                y / area
-            ];
-            return this._map.layerPointToLatLng(center);
+            return polygonCenter(this._defaultShape(), this._map.options.crs);
         },
         _convertLatLngs: function(latlngs) {
             var result = Polyline.prototype._convertLatLngs.call(this, latlngs), len = result.length;
@@ -12196,15 +12559,15 @@ function fitBoundsPadding(e) {
         },
         // @method setStyle( <Function> style ): this
         // Changes styles of GeoJSON vector layers with the given style function.
-        setStyle: function(style) {
+        setStyle: function(style2) {
             return this.eachLayer(function(layer) {
-                this._setLayerStyle(layer, style);
+                this._setLayerStyle(layer, style2);
             }, this);
         },
-        _setLayerStyle: function(layer, style) {
+        _setLayerStyle: function(layer, style2) {
             if (layer.setStyle) {
-                if (typeof style === 'function') style = style(layer.feature);
-                layer.setStyle(style);
+                if (typeof style2 === 'function') style2 = style2(layer.feature);
+                layer.setStyle(style2);
             }
         }
     });
@@ -12237,12 +12600,18 @@ function fitBoundsPadding(e) {
                 return new Polygon(latlngs, options);
             case 'GeometryCollection':
                 for(i = 0, len = geometry.geometries.length; i < len; i++){
-                    var layer = geometryToLayer({
+                    var geoLayer = geometryToLayer({
                         geometry: geometry.geometries[i],
                         type: 'Feature',
                         properties: geojson.properties
                     }, options);
-                    if (layer) layers1.push(layer);
+                    if (geoLayer) layers1.push(geoLayer);
+                }
+                return new FeatureGroup(layers1);
+            case 'FeatureCollection':
+                for(i = 0, len = geometry.features.length; i < len; i++){
+                    var featureLayer = geometryToLayer(geometry.features[i], options);
+                    if (featureLayer) layers1.push(featureLayer);
                 }
                 return new FeatureGroup(layers1);
             default:
@@ -12270,10 +12639,11 @@ function fitBoundsPadding(e) {
         }
         return latlngs;
     }
-    // @function latLngToCoords(latlng: LatLng, precision?: Number): Array
+    // @function latLngToCoords(latlng: LatLng, precision?: Number|false): Array
     // Reverse of [`coordsToLatLng`](#geojson-coordstolatlng)
+    // Coordinates values are rounded with [`formatNum`](#util-formatnum) function.
     function latLngToCoords(latlng, precision) {
-        precision = typeof precision === 'number' ? precision : 6;
+        latlng = toLatLng(latlng);
         return latlng.alt !== undefined ? [
             formatNum(latlng.lng, precision),
             formatNum(latlng.lat, precision),
@@ -12283,13 +12653,15 @@ function fitBoundsPadding(e) {
             formatNum(latlng.lat, precision)
         ];
     }
-    // @function latLngsToCoords(latlngs: Array, levelsDeep?: Number, closed?: Boolean): Array
+    // @function latLngsToCoords(latlngs: Array, levelsDeep?: Number, closed?: Boolean, precision?: Number|false): Array
     // Reverse of [`coordsToLatLngs`](#geojson-coordstolatlngs)
     // `closed` determines whether the first point should be appended to the end of the array to close the feature, only used when `levelsDeep` is 0. False by default.
+    // Coordinates values are rounded with [`formatNum`](#util-formatnum) function.
     function latLngsToCoords(latlngs, levelsDeep, closed, precision) {
         var coords = [];
-        for(var i = 0, len = latlngs.length; i < len; i++)coords.push(levelsDeep ? latLngsToCoords(latlngs[i], levelsDeep - 1, closed, precision) : latLngToCoords(latlngs[i], precision));
-        if (!levelsDeep && closed) coords.push(coords[0]);
+        for(var i = 0, len = latlngs.length; i < len; i++)// Check for flat arrays required to ensure unbalanced arrays are correctly converted in recursion
+        coords.push(levelsDeep ? latLngsToCoords(latlngs[i], isFlat(latlngs[i]) ? 0 : levelsDeep - 1, closed, precision) : latLngToCoords(latlngs[i], precision));
+        if (!levelsDeep && closed && coords.length > 0) coords.push(coords[0].slice());
         return coords;
     }
     function getFeature(layer, newGeometry) {
@@ -12319,23 +12691,20 @@ function fitBoundsPadding(e) {
     };
     // @namespace Marker
     // @section Other methods
-    // @method toGeoJSON(precision?: Number): Object
-    // `precision` is the number of decimal places for coordinates.
-    // The default value is 6 places.
-    // Returns a [`GeoJSON`](http://en.wikipedia.org/wiki/GeoJSON) representation of the marker (as a GeoJSON `Point` Feature).
+    // @method toGeoJSON(precision?: Number|false): Object
+    // Coordinates values are rounded with [`formatNum`](#util-formatnum) function with given `precision`.
+    // Returns a [`GeoJSON`](https://en.wikipedia.org/wiki/GeoJSON) representation of the marker (as a GeoJSON `Point` Feature).
     Marker.include(PointToGeoJSON);
     // @namespace CircleMarker
-    // @method toGeoJSON(precision?: Number): Object
-    // `precision` is the number of decimal places for coordinates.
-    // The default value is 6 places.
-    // Returns a [`GeoJSON`](http://en.wikipedia.org/wiki/GeoJSON) representation of the circle marker (as a GeoJSON `Point` Feature).
+    // @method toGeoJSON(precision?: Number|false): Object
+    // Coordinates values are rounded with [`formatNum`](#util-formatnum) function with given `precision`.
+    // Returns a [`GeoJSON`](https://en.wikipedia.org/wiki/GeoJSON) representation of the circle marker (as a GeoJSON `Point` Feature).
     Circle.include(PointToGeoJSON);
     CircleMarker.include(PointToGeoJSON);
     // @namespace Polyline
-    // @method toGeoJSON(precision?: Number): Object
-    // `precision` is the number of decimal places for coordinates.
-    // The default value is 6 places.
-    // Returns a [`GeoJSON`](http://en.wikipedia.org/wiki/GeoJSON) representation of the polyline (as a GeoJSON `LineString` or `MultiLineString` Feature).
+    // @method toGeoJSON(precision?: Number|false): Object
+    // Coordinates values are rounded with [`formatNum`](#util-formatnum) function with given `precision`.
+    // Returns a [`GeoJSON`](https://en.wikipedia.org/wiki/GeoJSON) representation of the polyline (as a GeoJSON `LineString` or `MultiLineString` Feature).
     Polyline.include({
         toGeoJSON: function(precision) {
             var multi = !isFlat(this._latlngs);
@@ -12347,10 +12716,9 @@ function fitBoundsPadding(e) {
         }
     });
     // @namespace Polygon
-    // @method toGeoJSON(precision?: Number): Object
-    // `precision` is the number of decimal places for coordinates.
-    // The default value is 6 places.
-    // Returns a [`GeoJSON`](http://en.wikipedia.org/wiki/GeoJSON) representation of the polygon (as a GeoJSON `Polygon` or `MultiPolygon` Feature).
+    // @method toGeoJSON(precision?: Number|false): Object
+    // Coordinates values are rounded with [`formatNum`](#util-formatnum) function with given `precision`.
+    // Returns a [`GeoJSON`](https://en.wikipedia.org/wiki/GeoJSON) representation of the polygon (as a GeoJSON `Polygon` or `MultiPolygon` Feature).
     Polygon.include({
         toGeoJSON: function(precision) {
             var holes = !isFlat(this._latlngs), multi = holes && !isFlat(this._latlngs[0]);
@@ -12376,10 +12744,9 @@ function fitBoundsPadding(e) {
                 coordinates: coords
             });
         },
-        // @method toGeoJSON(precision?: Number): Object
-        // `precision` is the number of decimal places for coordinates.
-        // The default value is 6 places.
-        // Returns a [`GeoJSON`](http://en.wikipedia.org/wiki/GeoJSON) representation of the layer group (as a GeoJSON `FeatureCollection`, `GeometryCollection`, or `MultiPoint`).
+        // @method toGeoJSON(precision?: Number|false): Object
+        // Coordinates values are rounded with [`formatNum`](#util-formatnum) function with given `precision`.
+        // Returns a [`GeoJSON`](https://en.wikipedia.org/wiki/GeoJSON) representation of the layer group (as a GeoJSON `FeatureCollection`, `GeometryCollection`, or `MultiPoint`).
         toGeoJSON: function(precision) {
             var type = this.feature && this.feature.geometry && this.feature.geometry.type;
             if (type === 'MultiPoint') return this.toMultiPoint(precision);
@@ -12426,7 +12793,7 @@ function fitBoundsPadding(e) {
    * @example
    *
    * ```js
-   * var imageUrl = 'http://www.lib.utexas.edu/maps/historical/newark_nj_1922.jpg',
+   * var imageUrl = 'https://maps.lib.utexas.edu/maps/historical/newark_nj_1922.jpg',
    * 	imageBounds = [[40.712216, -74.22655], [40.773941, -74.12544]];
    * L.imageOverlay(imageUrl, imageBounds).addTo(map);
    * ```
@@ -12588,6 +12955,11 @@ function fitBoundsPadding(e) {
                 this._url = errorUrl;
                 this._image.src = errorUrl;
             }
+        },
+        // @method getCenter(): LatLng
+        // Returns the center of the ImageOverlay.
+        getCenter: function() {
+            return this._bounds.getCenter();
         }
     });
     // @factory L.imageOverlay(imageUrl: String, bounds: LatLngBounds, options?: ImageOverlay options)
@@ -12619,17 +12991,21 @@ function fitBoundsPadding(e) {
         options: {
             // @option autoplay: Boolean = true
             // Whether the video starts playing automatically when loaded.
+            // On some browsers autoplay will only work with `muted: true`
             autoplay: true,
             // @option loop: Boolean = true
             // Whether the video will loop back to the beginning when played.
             loop: true,
             // @option keepAspectRatio: Boolean = true
             // Whether the video will save aspect ratio after the projection.
-            // Relevant for supported browsers. Browser compatibility- https://developer.mozilla.org/en-US/docs/Web/CSS/object-fit
+            // Relevant for supported browsers. See [browser compatibility](https://developer.mozilla.org/en-US/docs/Web/CSS/object-fit)
             keepAspectRatio: true,
             // @option muted: Boolean = false
             // Whether the video starts on mute when loaded.
-            muted: false
+            muted: false,
+            // @option playsInline: Boolean = true
+            // Mobile browsers will play the video right where it is instead of open it up in fullscreen mode.
+            playsInline: true
         },
         _initImage: function() {
             var wasElementSupplied = this._url.tagName === 'VIDEO';
@@ -12658,6 +13034,7 @@ function fitBoundsPadding(e) {
             vid.autoplay = !!this.options.autoplay;
             vid.loop = !!this.options.loop;
             vid.muted = !!this.options.muted;
+            vid.playsInline = !!this.options.playsInline;
             for(var i = 0; i < this._url.length; i++){
                 var source = create$1('source');
                 source.src = this._url[i];
@@ -12708,31 +13085,74 @@ function fitBoundsPadding(e) {
     }
     /*
    * @class DivOverlay
-   * @inherits Layer
+   * @inherits Interactive layer
    * @aka L.DivOverlay
-   * Base model for L.Popup and L.Tooltip. Inherit from it for custom popup like plugins.
+   * Base model for L.Popup and L.Tooltip. Inherit from it for custom overlays like plugins.
    */ // @namespace DivOverlay
     var DivOverlay = Layer.extend({
         // @section
         // @aka DivOverlay options
         options: {
-            // @option offset: Point = Point(0, 7)
-            // The offset of the popup position. Useful to control the anchor
-            // of the popup when opening it on some overlays.
+            // @option interactive: Boolean = false
+            // If true, the popup/tooltip will listen to the mouse events.
+            interactive: false,
+            // @option offset: Point = Point(0, 0)
+            // The offset of the overlay position.
             offset: [
                 0,
-                7
+                0
             ],
             // @option className: String = ''
-            // A custom CSS class name to assign to the popup.
+            // A custom CSS class name to assign to the overlay.
             className: '',
-            // @option pane: String = 'popupPane'
-            // `Map pane` where the popup will be added.
-            pane: 'popupPane'
+            // @option pane: String = undefined
+            // `Map pane` where the overlay will be added.
+            pane: undefined,
+            // @option content: String|HTMLElement|Function = ''
+            // Sets the HTML content of the overlay while initializing. If a function is passed the source layer will be
+            // passed to the function. The function should return a `String` or `HTMLElement` to be used in the overlay.
+            content: ''
         },
         initialize: function(options, source) {
-            setOptions(this, options);
-            this._source = source;
+            if (options && (options instanceof LatLng || isArray(options))) {
+                this._latlng = toLatLng(options);
+                setOptions(this, source);
+            } else {
+                setOptions(this, options);
+                this._source = source;
+            }
+            if (this.options.content) this._content = this.options.content;
+        },
+        // @method openOn(map: Map): this
+        // Adds the overlay to the map.
+        // Alternative to `map.openPopup(popup)`/`.openTooltip(tooltip)`.
+        openOn: function(map) {
+            map = arguments.length ? map : this._source._map; // experimental, not the part of public api
+            if (!map.hasLayer(this)) map.addLayer(this);
+            return this;
+        },
+        // @method close(): this
+        // Closes the overlay.
+        // Alternative to `map.closePopup(popup)`/`.closeTooltip(tooltip)`
+        // and `layer.closePopup()`/`.closeTooltip()`.
+        close: function() {
+            if (this._map) this._map.removeLayer(this);
+            return this;
+        },
+        // @method toggle(layer?: Layer): this
+        // Opens or closes the overlay bound to layer depending on its current state.
+        // Argument may be omitted only for overlay bound to layer.
+        // Alternative to `layer.togglePopup()`/`.toggleTooltip()`.
+        toggle: function(layer) {
+            if (this._map) this.close();
+            else {
+                if (arguments.length) this._source = layer;
+                else layer = this._source;
+                this._prepareOpen();
+                // open the overlay on the map
+                this.openOn(layer._map);
+            }
+            return this;
         },
         onAdd: function(map) {
             this._zoomAnimated = map._zoomAnimated;
@@ -12743,21 +13163,29 @@ function fitBoundsPadding(e) {
             this.update();
             if (map._fadeAnimated) setOpacity(this._container, 1);
             this.bringToFront();
+            if (this.options.interactive) {
+                addClass(this._container, 'leaflet-interactive');
+                this.addInteractiveTarget(this._container);
+            }
         },
         onRemove: function(map) {
             if (map._fadeAnimated) {
                 setOpacity(this._container, 0);
                 this._removeTimeout = setTimeout(bind(remove, undefined, this._container), 200);
             } else remove(this._container);
+            if (this.options.interactive) {
+                removeClass(this._container, 'leaflet-interactive');
+                this.removeInteractiveTarget(this._container);
+            }
         },
-        // @namespace Popup
+        // @namespace DivOverlay
         // @method getLatLng: LatLng
-        // Returns the geographical point of popup.
+        // Returns the geographical point of the overlay.
         getLatLng: function() {
             return this._latlng;
         },
         // @method setLatLng(latlng: LatLng): this
-        // Sets the geographical point where the popup will open.
+        // Sets the geographical point where the overlay will open.
         setLatLng: function(latlng) {
             this._latlng = toLatLng(latlng);
             if (this._map) {
@@ -12767,24 +13195,25 @@ function fitBoundsPadding(e) {
             return this;
         },
         // @method getContent: String|HTMLElement
-        // Returns the content of the popup.
+        // Returns the content of the overlay.
         getContent: function() {
             return this._content;
         },
         // @method setContent(htmlContent: String|HTMLElement|Function): this
-        // Sets the HTML content of the popup. If a function is passed the source layer will be passed to the function. The function should return a `String` or `HTMLElement` to be used in the popup.
+        // Sets the HTML content of the overlay. If a function is passed the source layer will be passed to the function.
+        // The function should return a `String` or `HTMLElement` to be used in the overlay.
         setContent: function(content) {
             this._content = content;
             this.update();
             return this;
         },
         // @method getElement: String|HTMLElement
-        // Returns the HTML container of the popup.
+        // Returns the HTML container of the overlay.
         getElement: function() {
             return this._container;
         },
         // @method update: null
-        // Updates the popup content, layout and position. Useful for updating the popup after something inside changed, e.g. image loaded.
+        // Updates the overlay content, layout and position. Useful for updating the overlay after something inside changed, e.g. image loaded.
         update: function() {
             if (!this._map) return;
             this._container.style.visibility = 'hidden';
@@ -12803,41 +13232,48 @@ function fitBoundsPadding(e) {
             return events;
         },
         // @method isOpen: Boolean
-        // Returns `true` when the popup is visible on the map.
+        // Returns `true` when the overlay is visible on the map.
         isOpen: function() {
             return !!this._map && this._map.hasLayer(this);
         },
         // @method bringToFront: this
-        // Brings this popup in front of other popups (in the same map pane).
+        // Brings this overlay in front of other overlays (in the same map pane).
         bringToFront: function() {
             if (this._map) toFront(this._container);
             return this;
         },
         // @method bringToBack: this
-        // Brings this popup to the back of other popups (in the same map pane).
+        // Brings this overlay to the back of other overlays (in the same map pane).
         bringToBack: function() {
             if (this._map) toBack(this._container);
             return this;
         },
-        _prepareOpen: function(parent, layer, latlng) {
-            if (!(layer instanceof Layer)) {
-                latlng = layer;
-                layer = parent;
-            }
-            if (layer instanceof FeatureGroup) for(var id in parent._layers){
-                layer = parent._layers[id];
-                break;
+        // prepare bound overlay to open: update latlng pos / content source (for FeatureGroup)
+        _prepareOpen: function(latlng) {
+            var source = this._source;
+            if (!source._map) return false;
+            if (source instanceof FeatureGroup) {
+                source = null;
+                var layers1 = this._source._layers;
+                for(var id in layers1)if (layers1[id]._map) {
+                    source = layers1[id];
+                    break;
+                }
+                if (!source) return false;
+                 // Unable to get source layer.
+                // set overlay source to this layer
+                this._source = source;
             }
             if (!latlng) {
-                if (layer.getCenter) latlng = layer.getCenter();
-                else if (layer.getLatLng) latlng = layer.getLatLng();
+                if (source.getCenter) latlng = source.getCenter();
+                else if (source.getLatLng) latlng = source.getLatLng();
+                else if (source.getBounds) latlng = source.getBounds().getCenter();
                 else throw new Error('Unable to get source layer LatLng.');
             }
-            // set overlay source to this layer
-            this._source = layer;
-            // update the overlay (content, layout, ect...)
+            this.setLatLng(latlng);
+            if (this._map) // update the overlay (content, layout, etc...)
             this.update();
-            return latlng;
+            return true;
         },
         _updateContent: function() {
             if (!this._content) return;
@@ -12848,6 +13284,10 @@ function fitBoundsPadding(e) {
                 while(node.hasChildNodes())node.removeChild(node.firstChild);
                 node.appendChild(content);
             }
+            // @namespace DivOverlay
+            // @section DivOverlay events
+            // @event contentupdate: Event
+            // Fired when the content of the overlay is updated
             this.fire('contentupdate');
         },
         _updatePosition: function() {
@@ -12856,7 +13296,7 @@ function fitBoundsPadding(e) {
             if (this._zoomAnimated) setPosition(this._container, pos.add(anchor));
             else offset = offset.add(pos).add(anchor);
             var bottom = this._containerBottom = -offset.y, left = this._containerLeft = -Math.round(this._containerWidth / 2) + offset.x;
-            // bottom position the popup in case the height of the popup changes (images loading etc)
+            // bottom position the overlay in case the height of the overlay changes (images loading etc)
             this._container.style.bottom = bottom + 'px';
             this._container.style.left = left + 'px';
         },
@@ -12865,6 +13305,27 @@ function fitBoundsPadding(e) {
                 0,
                 0
             ];
+        }
+    });
+    Map1.include({
+        _initOverlay: function(OverlayClass, content, latlng, options) {
+            var overlay = content;
+            if (!(overlay instanceof OverlayClass)) overlay = new OverlayClass(options).setContent(content);
+            if (latlng) overlay.setLatLng(latlng);
+            return overlay;
+        }
+    });
+    Layer.include({
+        _initOverlay: function(OverlayClass, old, content, options) {
+            var overlay = content;
+            if (overlay instanceof OverlayClass) {
+                setOptions(overlay, options);
+                overlay._source = this;
+            } else {
+                overlay = old && !options ? old : new OverlayClass(options, this);
+                overlay.setContent(content);
+            }
+            return overlay;
         }
     });
     /*
@@ -12883,7 +13344,8 @@ function fitBoundsPadding(e) {
    * marker.bindPopup(popupContent).openPopup();
    * ```
    * Path overlays like polylines also have a `bindPopup` method.
-   * Here's a more complicated way to open a popup on a map:
+   *
+   * A popup can be also standalone:
    *
    * ```js
    * var popup = L.popup()
@@ -12891,11 +13353,25 @@ function fitBoundsPadding(e) {
    * 	.setContent('<p>Hello world!<br />This is a nice popup.</p>')
    * 	.openOn(map);
    * ```
+   * or
+   * ```js
+   * var popup = L.popup(latlng, {content: '<p>Hello world!<br />This is a nice popup.</p>')
+   * 	.openOn(map);
+   * ```
    */ // @namespace Popup
     var Popup = DivOverlay.extend({
         // @section
         // @aka Popup options
         options: {
+            // @option pane: String = 'popupPane'
+            // `Map pane` where the popup will be added.
+            pane: 'popupPane',
+            // @option offset: Point = Point(0, 7)
+            // The offset of the popup position.
+            offset: [
+                0,
+                7
+            ],
             // @option maxWidth: Number = 300
             // Max width of the popup, in pixels.
             maxWidth: 300,
@@ -12905,6 +13381,8 @@ function fitBoundsPadding(e) {
             // @option maxHeight: Number = null
             // If set, creates a scrollable container of the given height
             // inside a popup if its content exceeds it.
+            // The scrollable container can be styled using the
+            // `leaflet-popup-scrolled` CSS class selector.
             maxHeight: null,
             // @option autoPan: Boolean = true
             // Set it to `false` if you don't want the map to do panning animation
@@ -12948,10 +13426,13 @@ function fitBoundsPadding(e) {
         },
         // @namespace Popup
         // @method openOn(map: Map): this
-        // Adds the popup to the map and closes the previous one. The same as `map.openPopup(popup)`.
+        // Alternative to `map.openPopup(popup)`.
+        // Adds the popup to the map and closes the previous one.
         openOn: function(map) {
-            map.openPopup(this);
-            return this;
+            map = arguments.length ? map : this._source._map; // experimental, not the part of public api
+            if (!map.hasLayer(this) && map._popup && map._popup.options.autoClose) map.removeLayer(map._popup);
+            map._popup = this;
+            return DivOverlay.prototype.openOn.call(this, map);
         },
         onAdd: function(map) {
             DivOverlay.prototype.onAdd.call(this, map);
@@ -12997,12 +13478,9 @@ function fitBoundsPadding(e) {
         },
         getEvents: function() {
             var events = DivOverlay.prototype.getEvents.call(this);
-            if (this.options.closeOnClick !== undefined ? this.options.closeOnClick : this._map.options.closePopupOnClick) events.preclick = this._close;
+            if (this.options.closeOnClick !== undefined ? this.options.closeOnClick : this._map.options.closePopupOnClick) events.preclick = this.close;
             if (this.options.keepInView) events.moveend = this._adjustPan;
             return events;
-        },
-        _close: function() {
-            if (this._map) this._map.closePopup(this);
         },
         _initLayout: function() {
             var prefix = 'leaflet-popup', container = this._container = create$1('div', prefix + ' ' + (this.options.className || '') + ' leaflet-zoom-animated');
@@ -13015,24 +13493,29 @@ function fitBoundsPadding(e) {
             this._tip = create$1('div', prefix + '-tip', this._tipContainer);
             if (this.options.closeButton) {
                 var closeButton = this._closeButton = create$1('a', prefix + '-close-button', container);
+                closeButton.setAttribute('role', 'button'); // overrides the implicit role=link of <a> elements #7399
+                closeButton.setAttribute('aria-label', 'Close popup');
                 closeButton.href = '#close';
-                closeButton.innerHTML = '&#215;';
-                on(closeButton, 'click', this._onCloseButtonClick, this);
+                closeButton.innerHTML = '<span aria-hidden="true">&#215;</span>';
+                on(closeButton, 'click', function(ev) {
+                    preventDefault(ev);
+                    this.close();
+                }, this);
             }
         },
         _updateLayout: function() {
-            var container = this._contentNode, style = container.style;
-            style.width = '';
-            style.whiteSpace = 'nowrap';
+            var container = this._contentNode, style2 = container.style;
+            style2.width = '';
+            style2.whiteSpace = 'nowrap';
             var width = container.offsetWidth;
             width = Math.min(width, this.options.maxWidth);
             width = Math.max(width, this.options.minWidth);
-            style.width = width + 1 + 'px';
-            style.whiteSpace = '';
-            style.height = '';
+            style2.width = width + 1 + 'px';
+            style2.whiteSpace = '';
+            style2.height = '';
             var height = container.offsetHeight, maxHeight = this.options.maxHeight, scrolledClass = 'leaflet-popup-scrolled';
             if (maxHeight && height > maxHeight) {
-                style.height = maxHeight + 'px';
+                style2.height = maxHeight + 'px';
                 addClass(container, scrolledClass);
             } else removeClass(container, scrolledClass);
             this._containerWidth = this._container.offsetWidth;
@@ -13044,6 +13527,12 @@ function fitBoundsPadding(e) {
         _adjustPan: function() {
             if (!this.options.autoPan) return;
             if (this._map._panAnim) this._map._panAnim.stop();
+            // We can endlessly recurse if keepInView is set and the view resets.
+            // Let's guard against that by exiting early if we're responding to our own autopan.
+            if (this._autopanning) {
+                this._autopanning = false;
+                return;
+            }
             var map = this._map, marginBottom = parseInt(getStyle(this._container, 'marginBottom'), 10) || 0, containerHeight = this._container.offsetHeight + marginBottom, containerWidth = this._containerWidth, layerPos = new Point(this._containerLeft, -containerHeight - this._containerBottom);
             layerPos._add(getPosition(this._container));
             var containerPos = map.layerPointToContainerPoint(layerPos), padding = toPoint(this.options.autoPanPadding), paddingTL = toPoint(this.options.autoPanPaddingTopLeft || padding), paddingBR = toPoint(this.options.autoPanPaddingBottomRight || padding), size = map.getSize(), dx = 0, dy = 0;
@@ -13055,14 +13544,14 @@ function fitBoundsPadding(e) {
             // @section Popup events
             // @event autopanstart: Event
             // Fired when the map starts autopanning when opening a popup.
-            if (dx || dy) map.fire('autopanstart').panBy([
-                dx,
-                dy
-            ]);
-        },
-        _onCloseButtonClick: function(e) {
-            this._close();
-            stop(e);
+            if (dx || dy) {
+                // Track that we're autopanning, as this function will be re-ran on moveend
+                if (this.options.keepInView) this._autopanning = true;
+                map.fire('autopanstart').panBy([
+                    dx,
+                    dy
+                ]);
+            }
         },
         _getAnchor: function() {
             // Where should we anchor the popup on the source layer?
@@ -13075,6 +13564,9 @@ function fitBoundsPadding(e) {
     // @namespace Popup
     // @factory L.popup(options?: Popup options, source?: Layer)
     // Instantiates a `Popup` object given an optional `options` object that describes its appearance and location and an optional `source` object that is used to tag the popup with a reference to the Layer to which it refers.
+    // @alternative
+    // @factory L.popup(latlng: LatLng, options?: Popup options)
+    // Instantiates a `Popup` object given `latlng` where the popup will open and an optional `options` object that describes its appearance and location.
     var popup = function(options, source) {
         return new Popup(options, source);
     };
@@ -13094,21 +13586,14 @@ function fitBoundsPadding(e) {
         // @method openPopup(content: String|HTMLElement, latlng: LatLng, options?: Popup options): this
         // Creates a popup with the specified content and options and opens it in the given point on a map.
         openPopup: function(popup1, latlng, options) {
-            if (!(popup1 instanceof Popup)) popup1 = new Popup(options).setContent(popup1);
-            if (latlng) popup1.setLatLng(latlng);
-            if (this.hasLayer(popup1)) return this;
-            if (this._popup && this._popup.options.autoClose) this.closePopup();
-            this._popup = popup1;
-            return this.addLayer(popup1);
+            this._initOverlay(Popup, popup1, latlng, options).openOn(this);
+            return this;
         },
         // @method closePopup(popup?: Popup): this
         // Closes the popup previously opened with [openPopup](#map-openpopup) (or the given one).
         closePopup: function(popup1) {
-            if (!popup1 || popup1 === this._popup) {
-                popup1 = this._popup;
-                this._popup = null;
-            }
-            if (popup1) this.removeLayer(popup1);
+            popup1 = arguments.length ? popup1 : this._popup;
+            if (popup1) popup1.close();
             return this;
         }
     });
@@ -13132,14 +13617,7 @@ function fitBoundsPadding(e) {
         // necessary event listeners. If a `Function` is passed it will receive
         // the layer as the first argument and should return a `String` or `HTMLElement`.
         bindPopup: function(content, options) {
-            if (content instanceof Popup) {
-                setOptions(content, options);
-                this._popup = content;
-                content._source = this;
-            } else {
-                if (!this._popup || options) this._popup = new Popup(options, this);
-                this._popup.setContent(content);
-            }
+            this._popup = this._initOverlay(Popup, this._popup, content, options);
             if (!this._popupHandlersAdded) {
                 this.on({
                     click: this._openPopup,
@@ -13168,27 +13646,24 @@ function fitBoundsPadding(e) {
         },
         // @method openPopup(latlng?: LatLng): this
         // Opens the bound popup at the specified `latlng` or at the default popup anchor if no `latlng` is passed.
-        openPopup: function(layer, latlng) {
-            if (this._popup && this._map) {
-                latlng = this._popup._prepareOpen(this, layer, latlng);
-                // open the popup on the map
-                this._map.openPopup(this._popup, latlng);
+        openPopup: function(latlng) {
+            if (this._popup) {
+                if (!(this instanceof FeatureGroup)) this._popup._source = this;
+                if (this._popup._prepareOpen(latlng || this._latlng)) // open the popup on the map
+                this._popup.openOn(this._map);
             }
             return this;
         },
         // @method closePopup(): this
         // Closes the popup bound to this layer if it is open.
         closePopup: function() {
-            if (this._popup) this._popup._close();
+            if (this._popup) this._popup.close();
             return this;
         },
         // @method togglePopup(): this
         // Opens or closes the popup bound to this layer depending on its current state.
-        togglePopup: function(target) {
-            if (this._popup) {
-                if (this._popup._map) this.closePopup();
-                else this.openPopup(target);
-            }
+        togglePopup: function() {
+            if (this._popup) this._popup.toggle(this);
             return this;
         },
         // @method isPopupOpen(): boolean
@@ -13208,21 +13683,19 @@ function fitBoundsPadding(e) {
             return this._popup;
         },
         _openPopup: function(e) {
-            var layer = e.layer || e.target;
-            if (!this._popup) return;
-            if (!this._map) return;
+            if (!this._popup || !this._map) return;
             // prevent map click
             stop(e);
-            // if this inherits from Path its a vector and we can just
-            // open the popup at the new location
-            if (layer instanceof Path) {
-                this.openPopup(e.layer || e.target, e.latlng);
+            var target = e.layer || e.target;
+            if (this._popup._source === target && !(target instanceof Path)) {
+                // treat it like a marker and figure out
+                // if we should toggle it open/closed
+                if (this._map.hasLayer(this._popup)) this.closePopup();
+                else this.openPopup(e.latlng);
                 return;
             }
-            // otherwise treat it like a marker and figure out
-            // if we should toggle it open/closed
-            if (this._map.hasLayer(this._popup) && this._popup._source === layer) this.closePopup();
-            else this.openPopup(layer, e.latlng);
+            this._popup._source = target;
+            this.openPopup(e.latlng);
         },
         _movePopup: function(e) {
             this._popup.setLatLng(e.latlng);
@@ -13238,10 +13711,28 @@ function fitBoundsPadding(e) {
    * Used to display small texts on top of map layers.
    *
    * @example
+   * If you want to just bind a tooltip to marker:
    *
    * ```js
    * marker.bindTooltip("my tooltip text").openTooltip();
    * ```
+   * Path overlays like polylines also have a `bindTooltip` method.
+   *
+   * A tooltip can be also standalone:
+   *
+   * ```js
+   * var tooltip = L.tooltip()
+   * 	.setLatLng(latlng)
+   * 	.setContent('Hello world!<br />This is a nice tooltip.')
+   * 	.addTo(map);
+   * ```
+   * or
+   * ```js
+   * var tooltip = L.tooltip(latlng, {content: 'Hello world!<br />This is a nice tooltip.'})
+   * 	.addTo(map);
+   * ```
+   *
+   *
    * Note about tooltip offset. Leaflet takes two options in consideration
    * for computing tooltip offsetting:
    * - the `offset` Tooltip option: it defaults to [0, 0], and it's specific to one tooltip.
@@ -13275,9 +13766,6 @@ function fitBoundsPadding(e) {
             // @option sticky: Boolean = false
             // If true, the tooltip will follow the mouse instead of being fixed at the feature center.
             sticky: false,
-            // @option interactive: Boolean = false
-            // If true, the tooltip will listen to the feature events.
-            interactive: false,
             // @option opacity: Number = 0.9
             // Tooltip container opacity.
             opacity: 0.9
@@ -13292,13 +13780,16 @@ function fitBoundsPadding(e) {
             map.fire('tooltipopen', {
                 tooltip: this
             });
-            if (this._source) // @namespace Layer
-            // @section Tooltip events
-            // @event tooltipopen: TooltipEvent
-            // Fired when a tooltip bound to this layer is opened.
-            this._source.fire('tooltipopen', {
-                tooltip: this
-            }, true);
+            if (this._source) {
+                this.addEventParent(this._source);
+                // @namespace Layer
+                // @section Tooltip events
+                // @event tooltipopen: TooltipEvent
+                // Fired when a tooltip bound to this layer is opened.
+                this._source.fire('tooltipopen', {
+                    tooltip: this
+                }, true);
+            }
         },
         onRemove: function(map) {
             DivOverlay.prototype.onRemove.call(this, map);
@@ -13309,25 +13800,27 @@ function fitBoundsPadding(e) {
             map.fire('tooltipclose', {
                 tooltip: this
             });
-            if (this._source) // @namespace Layer
-            // @section Tooltip events
-            // @event tooltipclose: TooltipEvent
-            // Fired when a tooltip bound to this layer is closed.
-            this._source.fire('tooltipclose', {
-                tooltip: this
-            }, true);
+            if (this._source) {
+                this.removeEventParent(this._source);
+                // @namespace Layer
+                // @section Tooltip events
+                // @event tooltipclose: TooltipEvent
+                // Fired when a tooltip bound to this layer is closed.
+                this._source.fire('tooltipclose', {
+                    tooltip: this
+                }, true);
+            }
         },
         getEvents: function() {
             var events = DivOverlay.prototype.getEvents.call(this);
-            if (touch && !this.options.permanent) events.preclick = this._close;
+            if (!this.options.permanent) events.preclick = this.close;
             return events;
-        },
-        _close: function() {
-            if (this._map) this._map.closeTooltip(this);
         },
         _initLayout: function() {
             var prefix = 'leaflet-tooltip', className = prefix + ' ' + (this.options.className || '') + ' leaflet-zoom-' + (this._zoomAnimated ? 'animated' : 'hide');
             this._contentNode = this._container = create$1('div', className);
+            this._container.setAttribute('role', 'tooltip');
+            this._container.setAttribute('id', 'leaflet-tooltip-' + stamp(this));
         },
         _updateLayout: function() {
         },
@@ -13389,7 +13882,10 @@ function fitBoundsPadding(e) {
     });
     // @namespace Tooltip
     // @factory L.tooltip(options?: Tooltip options, source?: Layer)
-    // Instantiates a Tooltip object given an optional `options` object that describes its appearance and location and an optional `source` object that is used to tag the tooltip with a reference to the Layer to which it refers.
+    // Instantiates a `Tooltip` object given an optional `options` object that describes its appearance and location and an optional `source` object that is used to tag the tooltip with a reference to the Layer to which it refers.
+    // @alternative
+    // @factory L.tooltip(latlng: LatLng, options?: Tooltip options)
+    // Instantiates a `Tooltip` object given `latlng` where the tooltip will open and an optional `options` object that describes its appearance and location.
     var tooltip = function(options, source) {
         return new Tooltip(options, source);
     };
@@ -13402,15 +13898,13 @@ function fitBoundsPadding(e) {
         // @method openTooltip(content: String|HTMLElement, latlng: LatLng, options?: Tooltip options): this
         // Creates a tooltip with the specified content and options and open it.
         openTooltip: function(tooltip1, latlng, options) {
-            if (!(tooltip1 instanceof Tooltip)) tooltip1 = new Tooltip(options).setContent(tooltip1);
-            if (latlng) tooltip1.setLatLng(latlng);
-            if (this.hasLayer(tooltip1)) return this;
-            return this.addLayer(tooltip1);
+            this._initOverlay(Tooltip, tooltip1, latlng, options).openOn(this);
+            return this;
         },
-        // @method closeTooltip(tooltip?: Tooltip): this
+        // @method closeTooltip(tooltip: Tooltip): this
         // Closes the tooltip given as parameter.
         closeTooltip: function(tooltip1) {
-            if (tooltip1) this.removeLayer(tooltip1);
+            tooltip1.close();
             return this;
         }
     });
@@ -13432,14 +13926,8 @@ function fitBoundsPadding(e) {
         // necessary event listeners. If a `Function` is passed it will receive
         // the layer as the first argument and should return a `String` or `HTMLElement`.
         bindTooltip: function(content, options) {
-            if (content instanceof Tooltip) {
-                setOptions(content, options);
-                this._tooltip = content;
-                content._source = this;
-            } else {
-                if (!this._tooltip || options) this._tooltip = new Tooltip(options, this);
-                this._tooltip.setContent(content);
-            }
+            if (this._tooltip && this.isTooltipOpen()) this.unbindTooltip();
+            this._tooltip = this._initOverlay(Tooltip, this._tooltip, content, options);
             this._initTooltipInteractions();
             if (this._tooltip.options.permanent && this._map && this._map.hasLayer(this)) this.openTooltip();
             return this;
@@ -13454,33 +13942,33 @@ function fitBoundsPadding(e) {
             }
             return this;
         },
-        _initTooltipInteractions: function(remove$$1) {
-            if (!remove$$1 && this._tooltipHandlersAdded) return;
-            var onOff = remove$$1 ? 'off' : 'on', events = {
+        _initTooltipInteractions: function(remove1) {
+            if (!remove1 && this._tooltipHandlersAdded) return;
+            var onOff = remove1 ? 'off' : 'on', events = {
                 remove: this.closeTooltip,
                 move: this._moveTooltip
             };
             if (!this._tooltip.options.permanent) {
                 events.mouseover = this._openTooltip;
                 events.mouseout = this.closeTooltip;
-                if (this._tooltip.options.sticky) events.mousemove = this._moveTooltip;
-                if (touch) events.click = this._openTooltip;
+                events.click = this._openTooltip;
+                if (this._map) this._addFocusListeners();
+                else events.add = this._addFocusListeners;
             } else events.add = this._openTooltip;
+            if (this._tooltip.options.sticky) events.mousemove = this._moveTooltip;
             this[onOff](events);
-            this._tooltipHandlersAdded = !remove$$1;
+            this._tooltipHandlersAdded = !remove1;
         },
         // @method openTooltip(latlng?: LatLng): this
         // Opens the bound tooltip at the specified `latlng` or at the default tooltip anchor if no `latlng` is passed.
-        openTooltip: function(layer, latlng) {
-            if (this._tooltip && this._map) {
-                latlng = this._tooltip._prepareOpen(this, layer, latlng);
-                // open the tooltip on the map
-                this._map.openTooltip(this._tooltip, latlng);
-                // Tooltip container may not be defined if not permanent and never
-                // opened.
-                if (this._tooltip.options.interactive && this._tooltip._container) {
-                    addClass(this._tooltip._container, 'leaflet-clickable');
-                    this.addInteractiveTarget(this._tooltip._container);
+        openTooltip: function(latlng) {
+            if (this._tooltip) {
+                if (!(this instanceof FeatureGroup)) this._tooltip._source = this;
+                if (this._tooltip._prepareOpen(latlng)) {
+                    // open the tooltip on the map
+                    this._tooltip.openOn(this._map);
+                    if (this.getElement) this._setAriaDescribedByOnLayer(this);
+                    else if (this.eachLayer) this.eachLayer(this._setAriaDescribedByOnLayer, this);
                 }
             }
             return this;
@@ -13488,22 +13976,12 @@ function fitBoundsPadding(e) {
         // @method closeTooltip(): this
         // Closes the tooltip bound to this layer if it is open.
         closeTooltip: function() {
-            if (this._tooltip) {
-                this._tooltip._close();
-                if (this._tooltip.options.interactive && this._tooltip._container) {
-                    removeClass(this._tooltip._container, 'leaflet-clickable');
-                    this.removeInteractiveTarget(this._tooltip._container);
-                }
-            }
-            return this;
+            if (this._tooltip) return this._tooltip.close();
         },
         // @method toggleTooltip(): this
         // Opens or closes the tooltip bound to this layer depending on its current state.
-        toggleTooltip: function(target) {
-            if (this._tooltip) {
-                if (this._tooltip._map) this.closeTooltip();
-                else this.openTooltip(target);
-            }
+        toggleTooltip: function() {
+            if (this._tooltip) this._tooltip.toggle(this);
             return this;
         },
         // @method isTooltipOpen(): boolean
@@ -13522,10 +14000,38 @@ function fitBoundsPadding(e) {
         getTooltip: function() {
             return this._tooltip;
         },
+        _addFocusListeners: function() {
+            if (this.getElement) this._addFocusListenersOnLayer(this);
+            else if (this.eachLayer) this.eachLayer(this._addFocusListenersOnLayer, this);
+        },
+        _addFocusListenersOnLayer: function(layer) {
+            var el = typeof layer.getElement === 'function' && layer.getElement();
+            if (el) {
+                on(el, 'focus', function() {
+                    this._tooltip._source = layer;
+                    this.openTooltip();
+                }, this);
+                on(el, 'blur', this.closeTooltip, this);
+            }
+        },
+        _setAriaDescribedByOnLayer: function(layer) {
+            var el = typeof layer.getElement === 'function' && layer.getElement();
+            if (el) el.setAttribute('aria-describedby', this._tooltip._container.id);
+        },
         _openTooltip: function(e) {
-            var layer = e.layer || e.target;
             if (!this._tooltip || !this._map) return;
-            this.openTooltip(layer, this._tooltip.options.sticky ? e.latlng : undefined);
+            // If the map is moving, we will show the tooltip after it's done.
+            if (this._map.dragging && this._map.dragging.moving() && !this._openOnceFlag) {
+                this._openOnceFlag = true;
+                var that = this;
+                this._map.once('moveend', function() {
+                    that._openOnceFlag = false;
+                    that._openTooltip(e);
+                });
+                return;
+            }
+            this._tooltip._source = e.layer || e.target;
+            this.openTooltip(this._tooltip.options.sticky ? e.latlng : undefined);
         },
         _moveTooltip: function(e) {
             var latlng = e.latlng, containerPoint, layerPoint;
@@ -13674,7 +14180,7 @@ function fitBoundsPadding(e) {
             // `true` by default on mobile browsers, in order to avoid too many requests and keep smooth navigation.
             // `false` otherwise in order to display new tiles _during_ panning, since it is easy to pan outside the
             // [`keepBuffer`](#gridlayer-keepbuffer) option in desktop browsers.
-            updateWhenIdle: mobile,
+            updateWhenIdle: Browser.mobile,
             // @option updateWhenZooming: Boolean = true
             // By default, a smooth zoom animation (during a [touch zoom](#map-touchzoom) or a [`flyTo()`](#map-flyto)) will update grid layers every integer zoom level. Setting this option to `false` will update the grid layer only when the smooth animation ends.
             updateWhenZooming: true,
@@ -13729,8 +14235,7 @@ function fitBoundsPadding(e) {
             };
             this._tiles = {
             };
-            this._resetView();
-            this._update();
+            this._resetView(); // implicit _update() call
         },
         beforeAdd: function(map) {
             map._addZoomLimit(this);
@@ -13789,6 +14294,11 @@ function fitBoundsPadding(e) {
         redraw: function() {
             if (this._map) {
                 this._removeAllTiles();
+                var tileZoom = this._clampZoom(this._map.getZoom());
+                if (tileZoom !== this._tileZoom) {
+                    this._tileZoom = tileZoom;
+                    this._updateLevels();
+                }
                 this._update();
             }
             return this;
@@ -13829,10 +14339,10 @@ function fitBoundsPadding(e) {
         },
         _setAutoZIndex: function(compare) {
             // go through all other layers of the same pane, set zIndex to max + 1 (front) or min - 1 (back)
-            var layers1 = this.getPane().children, edgeZIndex = -compare(-Infinity, Infinity); // -Infinity for max, Infinity for min
-            for(var i = 0, len = layers1.length, zIndex; i < len; i++){
-                zIndex = layers1[i].style.zIndex;
-                if (layers1[i] !== this._container && zIndex) edgeZIndex = compare(edgeZIndex, +zIndex);
+            var layers2 = this.getPane().children, edgeZIndex = -compare(-Infinity, Infinity); // -Infinity for max, Infinity for min
+            for(var i = 0, len = layers2.length, zIndex; i < len; i++){
+                zIndex = layers2[i].style.zIndex;
+                if (layers2[i] !== this._container && zIndex) edgeZIndex = compare(edgeZIndex, +zIndex);
             }
             if (isFinite(edgeZIndex)) {
                 this.options.zIndex = edgeZIndex + compare(-1, 1);
@@ -13842,7 +14352,7 @@ function fitBoundsPadding(e) {
         _updateOpacity: function() {
             if (!this._map) return;
             // IE doesn't inherit filter opacity properly, so we're forced to set it on tiles
-            if (ielt9) return;
+            if (Browser.ielt9) return;
             setOpacity(this._container, this.options.opacity);
             var now = +new Date(), nextFrame = false, willPrune = false;
             for(var key in this._tiles){
@@ -14003,7 +14513,7 @@ function fitBoundsPadding(e) {
         },
         _setZoomTransform: function(level, center, zoom1) {
             var scale1 = this._map.getZoomScale(zoom1, level.zoom), translate = level.origin.multiplyBy(scale1).subtract(this._map._getNewPixelOrigin(center, zoom1)).round();
-            if (any3d) setTransform(level.el, translate, scale1);
+            if (Browser.any3d) setTransform(level.el, translate, scale1);
             else setPosition(level.el, translate);
         },
         _resetGrid: function() {
@@ -14151,10 +14661,7 @@ function fitBoundsPadding(e) {
             tile.onselectstart = falseFn;
             tile.onmousemove = falseFn;
             // update opacity on tiles in IE7-8 because of filter inheritance problems
-            if (ielt9 && this.options.opacity < 1) setOpacity(tile, this.options.opacity);
-            // without this hack, tiles disappear after zoom on Chrome for Android
-            // https://github.com/Leaflet/Leaflet/issues/2078
-            if (android && !android23) tile.style.WebkitBackfaceVisibility = 'hidden';
+            if (Browser.ielt9 && this.options.opacity < 1) setOpacity(tile, this.options.opacity);
         },
         _addTile: function(coords, container) {
             var tilePos = this._getTilePos(coords), key = this._tileCoordsToKey(coords);
@@ -14213,7 +14720,7 @@ function fitBoundsPadding(e) {
                 // @event load: Event
                 // Fired when the grid layer loaded all visible tiles.
                 this.fire('load');
-                if (ielt9 || !this._map._fadeAnimated) requestAnimFrame(this._pruneTiles, this);
+                if (Browser.ielt9 || !this._map._fadeAnimated) requestAnimFrame(this._pruneTiles, this);
                 else // Wait a bit more than 0.2 secs (the duration of the tile fade-in)
                 // to trigger a pruning.
                 setTimeout(bind(this._pruneTiles, this), 250);
@@ -14255,7 +14762,7 @@ function fitBoundsPadding(e) {
    * @example
    *
    * ```js
-   * L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png?{foo}', {foo: 'bar', attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>'}).addTo(map);
+   * L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png?{foo}', {foo: 'bar', attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(map);
    * ```
    *
    * @section URL template
@@ -14264,7 +14771,7 @@ function fitBoundsPadding(e) {
    * A string of the following form:
    *
    * ```
-   * 'http://{s}.somedomain.com/blabla/{z}/{x}/{y}{r}.png'
+   * 'https://{s}.somedomain.com/blabla/{z}/{x}/{y}{r}.png'
    * ```
    *
    * `{s}` means one of the available subdomains (used sequentially to help with browser parallel requests per domain limitation; subdomain values are specified in options; `a`, `b` or `c` by default, can be omitted), `{z}` — zoom level, `{x}` and `{y}` — tile coordinates. `{r}` can be used to add "&commat;2x" to the URL to load retina tiles.
@@ -14272,7 +14779,7 @@ function fitBoundsPadding(e) {
    * You can use custom keys in the template, which will be [evaluated](#util-template) from TileLayer options, like this:
    *
    * ```
-   * L.tileLayer('http://{s}.somedomain.com/{foo}/{z}/{x}/{y}.png', {foo: 'bar'});
+   * L.tileLayer('https://{s}.somedomain.com/{foo}/{z}/{x}/{y}.png', {foo: 'bar'});
    * ```
    */ var TileLayer = GridLayer.extend({
         // @section
@@ -14306,26 +14813,35 @@ function fitBoundsPadding(e) {
             // Whether the crossOrigin attribute will be added to the tiles.
             // If a String is provided, all tiles will have their crossOrigin attribute set to the String provided. This is needed if you want to access tile pixel data.
             // Refer to [CORS Settings](https://developer.mozilla.org/en-US/docs/Web/HTML/CORS_settings_attributes) for valid String values.
-            crossOrigin: false
+            crossOrigin: false,
+            // @option referrerPolicy: Boolean|String = false
+            // Whether the referrerPolicy attribute will be added to the tiles.
+            // If a String is provided, all tiles will have their referrerPolicy attribute set to the String provided.
+            // This may be needed if your map's rendering context has a strict default but your tile provider expects a valid referrer
+            // (e.g. to validate an API token).
+            // Refer to [HTMLImageElement.referrerPolicy](https://developer.mozilla.org/en-US/docs/Web/API/HTMLImageElement/referrerPolicy) for valid String values.
+            referrerPolicy: false
         },
         initialize: function(url, options) {
             this._url = url;
             options = setOptions(this, options);
             // detecting retina displays, adjusting tileSize and zoom levels
-            if (options.detectRetina && retina && options.maxZoom > 0) {
+            if (options.detectRetina && Browser.retina && options.maxZoom > 0) {
                 options.tileSize = Math.floor(options.tileSize / 2);
                 if (!options.zoomReverse) {
                     options.zoomOffset++;
-                    options.maxZoom--;
+                    options.maxZoom = Math.max(options.minZoom, options.maxZoom - 1);
                 } else {
                     options.zoomOffset--;
-                    options.minZoom++;
+                    options.minZoom = Math.min(options.maxZoom, options.minZoom + 1);
                 }
                 options.minZoom = Math.max(0, options.minZoom);
-            }
+            } else if (!options.zoomReverse) // make sure maxZoom is gte minZoom
+            options.maxZoom = Math.max(options.minZoom, options.maxZoom);
+            else // make sure minZoom is lte maxZoom
+            options.minZoom = Math.min(options.maxZoom, options.minZoom);
             if (typeof options.subdomains === 'string') options.subdomains = options.subdomains.split('');
-            // for https://github.com/Leaflet/Leaflet/issues/137
-            if (!android) this.on('tileunload', this._onTileRemove);
+            this.on('tileunload', this._onTileRemove);
         },
         // @method setUrl(url: String, noRedraw?: Boolean): this
         // Updates the layer's URL template and redraws it (unless `noRedraw` is set to `true`).
@@ -14346,14 +14862,14 @@ function fitBoundsPadding(e) {
             on(tile, 'load', bind(this._tileOnLoad, this, done, tile));
             on(tile, 'error', bind(this._tileOnError, this, done, tile));
             if (this.options.crossOrigin || this.options.crossOrigin === '') tile.crossOrigin = this.options.crossOrigin === true ? '' : this.options.crossOrigin;
-            /*
-  		 Alt tag is set to empty string to keep screen readers from reading URL and for compliance reasons
-  		 http://www.w3.org/TR/WCAG20-TECHS/H67
-  		*/ tile.alt = '';
-            /*
-  		 Set role="presentation" to force screen readers to ignore this
-  		 https://www.w3.org/TR/wai-aria/roles#textalternativecomputation
-  		*/ tile.setAttribute('role', 'presentation');
+            // for this new option we follow the documented behavior
+            // more closely by only setting the property when string
+            if (typeof this.options.referrerPolicy === 'string') tile.referrerPolicy = this.options.referrerPolicy;
+            // The alt attribute is set to the empty string,
+            // allowing screen readers to ignore the decorative image tiles.
+            // https://www.w3.org/WAI/tutorials/images/decorative/
+            // https://www.w3.org/TR/html-aria/#el-img-empty-alt
+            tile.alt = '';
             tile.src = this.getTileUrl(coords);
             return tile;
         },
@@ -14365,7 +14881,7 @@ function fitBoundsPadding(e) {
         // Classes extending `TileLayer` can override this function to provide custom tile URL naming schemes.
         getTileUrl: function(coords) {
             var data = {
-                r: retina ? '@2x' : '',
+                r: Browser.retina ? '@2x' : '',
                 s: this._getSubdomain(coords),
                 x: coords.x,
                 y: coords.y,
@@ -14380,7 +14896,7 @@ function fitBoundsPadding(e) {
         },
         _tileOnLoad: function(done, tile) {
             // For https://github.com/Leaflet/Leaflet/issues/3332
-            if (ielt9) setTimeout(bind(done, this, null, tile), 0);
+            if (Browser.ielt9) setTimeout(bind(done, this, null, tile), 0);
             else done(null, tile);
         },
         _tileOnError: function(done, tile, e) {
@@ -14409,8 +14925,15 @@ function fitBoundsPadding(e) {
                 tile.onerror = falseFn;
                 if (!tile.complete) {
                     tile.src = emptyImageUrl;
+                    var coords = this._tiles[i].coords;
                     remove(tile);
                     delete this._tiles[i];
+                    // @event tileabort: TileEvent
+                    // Fired when a tile was loading but is now not wanted.
+                    this.fire('tileabort', {
+                        tile: tile,
+                        coords: coords
+                    });
                 }
             }
         },
@@ -14418,9 +14941,7 @@ function fitBoundsPadding(e) {
             var tile = this._tiles[key];
             if (!tile) return;
             // Cancels any pending http requests associated with the tile
-            // unless we're on Android's stock browser,
-            // see https://github.com/Leaflet/Leaflet/issues/137
-            if (!androidStock) tile.el.setAttribute('src', emptyImageUrl);
+            tile.el.setAttribute('src', emptyImageUrl);
             return GridLayer.prototype._removeTile.call(this, key);
         },
         _tileReady: function(coords, err, tile) {
@@ -14454,7 +14975,7 @@ function fitBoundsPadding(e) {
         // @aka TileLayer.WMS options
         // If any custom options not documented here are used, they will be sent to the
         // WMS server as extra parameters in each request URL. This can be useful for
-        // [non-standard vendor WMS parameters](http://docs.geoserver.org/stable/en/user/services/wms/vendor.html).
+        // [non-standard vendor WMS parameters](https://docs.geoserver.org/stable/en/user/services/wms/vendor.html).
         defaultWmsParams: {
             service: 'WMS',
             request: 'GetMap',
@@ -14490,7 +15011,7 @@ function fitBoundsPadding(e) {
             // all keys that are not TileLayer options go to WMS params
             for(var i in options)if (!(i in this.options)) wmsParams[i] = options[i];
             options = setOptions(this, options);
-            var realRetina = options.detectRetina && retina ? 2 : 1;
+            var realRetina = options.detectRetina && Browser.retina ? 2 : 1;
             var tileSize = this.getTileSize();
             wmsParams.width = tileSize.x * realRetina;
             wmsParams.height = tileSize.y * realRetina;
@@ -14557,10 +15078,7 @@ function fitBoundsPadding(e) {
             // @option padding: Number = 0.1
             // How much to extend the clip area around the map view (relative to its size)
             // e.g. 0.1 would be 10% of map view in each direction
-            padding: 0.1,
-            // @option tolerance: Number = 0
-            // How much to extend click tolerance round a path/object on the map
-            tolerance: 0
+            padding: 0.1
         },
         initialize: function(options) {
             setOptions(this, options);
@@ -14571,7 +15089,8 @@ function fitBoundsPadding(e) {
         onAdd: function() {
             if (!this._container) {
                 this._initContainer(); // defined by renderer implementations
-                if (this._zoomAnimated) addClass(this._container, 'leaflet-zoom-animated');
+                // always keep transform-origin as 0 0
+                addClass(this._container, 'leaflet-zoom-animated');
             }
             this.getPane().appendChild(this._container);
             this._update();
@@ -14598,8 +15117,8 @@ function fitBoundsPadding(e) {
             this._updateTransform(this._map.getCenter(), this._map.getZoom());
         },
         _updateTransform: function(center, zoom1) {
-            var scale1 = this._map.getZoomScale(zoom1, this._zoom), position = getPosition(this._container), viewHalf = this._map.getSize().multiplyBy(0.5 + this.options.padding), currentCenterPoint = this._map.project(this._center, zoom1), destCenterPoint = this._map.project(center, zoom1), centerOffset = destCenterPoint.subtract(currentCenterPoint), topLeftOffset = viewHalf.multiplyBy(-scale1).add(position).add(viewHalf).subtract(centerOffset);
-            if (any3d) setTransform(this._container, topLeftOffset, scale1);
+            var scale1 = this._map.getZoomScale(zoom1, this._zoom), viewHalf = this._map.getSize().multiplyBy(0.5 + this.options.padding), currentCenterPoint = this._map.project(this._center, zoom1), topLeftOffset = viewHalf.multiplyBy(-scale1).add(currentCenterPoint).subtract(this._map._getNewPixelOrigin(center, zoom1));
+            if (Browser.any3d) setTransform(this._container, topLeftOffset, scale1);
             else setPosition(this._container, topLeftOffset);
         },
         _reset: function() {
@@ -14630,7 +15149,7 @@ function fitBoundsPadding(e) {
    * Allows vector layers to be displayed with [`<canvas>`](https://developer.mozilla.org/docs/Web/API/Canvas_API).
    * Inherits `Renderer`.
    *
-   * Due to [technical limitations](http://caniuse.com/#search=canvas), Canvas is not
+   * Due to [technical limitations](https://caniuse.com/canvas), Canvas is not
    * available in all web browsers, notably IE8, and overlapping geometries might
    * not display properly in some edge cases.
    *
@@ -14653,6 +15172,13 @@ function fitBoundsPadding(e) {
    * var circle = L.circle( center, { renderer: myRenderer } );
    * ```
    */ var Canvas = Renderer.extend({
+        // @section
+        // @aka Canvas options
+        options: {
+            // @option tolerance: Number = 0
+            // How much to extend the click tolerance around a path/object on the map.
+            tolerance: 0
+        },
         getEvents: function() {
             var events = Renderer.prototype.getEvents.call(this);
             events.viewprereset = this._onViewPreReset;
@@ -14673,6 +15199,7 @@ function fitBoundsPadding(e) {
             on(container, 'mousemove', this._onMouseMove, this);
             on(container, 'click dblclick mousedown mouseup contextmenu', this._onClick, this);
             on(container, 'mouseout', this._handleMouseOut, this);
+            container['_leaflet_disable_events'] = true;
             this._ctx = container.getContext('2d');
         },
         _destroyContainer: function() {
@@ -14695,14 +15222,14 @@ function fitBoundsPadding(e) {
         _update: function() {
             if (this._map._animatingZoom && this._bounds) return;
             Renderer.prototype._update.call(this);
-            var b = this._bounds, container = this._container, size = b.getSize(), m = retina ? 2 : 1;
+            var b = this._bounds, container = this._container, size = b.getSize(), m = Browser.retina ? 2 : 1;
             setPosition(container, b.min);
             // set canvas size (also clearing it); use double size on retina
             container.width = m * size.x;
             container.height = m * size.y;
             container.style.width = size.x + 'px';
             container.style.height = size.y + 'px';
-            if (retina) this._ctx.scale(2, 2);
+            if (Browser.retina) this._ctx.scale(2, 2);
             // translate so we use the same path coordinates after canvas element moves
             this._ctx.translate(-b.min.x, -b.min.y);
             // Tell paths to redraw themselves
@@ -14877,15 +15404,12 @@ function fitBoundsPadding(e) {
             for(var order = this._drawFirst; order; order = order.next){
                 layer = order.layer;
                 if (layer.options.interactive && layer._containsPoint(point)) {
-                    if (!(e.type === 'click' || e.type !== 'preclick') || !this._map._draggableMoved(layer)) clickedLayer = layer;
+                    if (!(e.type === 'click' || e.type === 'preclick') || !this._map._draggableMoved(layer)) clickedLayer = layer;
                 }
             }
-            if (clickedLayer) {
-                fakeStop(e);
-                this._fireEvent([
-                    clickedLayer
-                ], e);
-            }
+            this._fireEvent(clickedLayer ? [
+                clickedLayer
+            ] : false, e);
         },
         _onMouseMove: function(e) {
             if (!this._map || this._map.dragging.moving() || this._map._animatingZoom) return;
@@ -14921,16 +15445,16 @@ function fitBoundsPadding(e) {
                     this._hoveredLayer = candidateHoveredLayer;
                 }
             }
-            if (this._hoveredLayer) this._fireEvent([
+            this._fireEvent(this._hoveredLayer ? [
                 this._hoveredLayer
-            ], e);
+            ] : false, e);
             this._mouseHoverThrottled = true;
             setTimeout(bind(function() {
                 this._mouseHoverThrottled = false;
             }, this), 32);
         },
-        _fireEvent: function(layers1, e, type) {
-            this._map._fireDOMEvent(e, type || e.type, layers1);
+        _fireEvent: function(layers2, e, type) {
+            this._map._fireDOMEvent(e, type || e.type, layers2);
         },
         _bringToFront: function(layer) {
             var order = layer._order;
@@ -14971,8 +15495,8 @@ function fitBoundsPadding(e) {
     });
     // @factory L.canvas(options?: Renderer options)
     // Creates a Canvas renderer with the given options.
-    function canvas$1(options) {
-        return canvas ? new Canvas(options) : null;
+    function canvas(options) {
+        return Browser.canvas ? new Canvas(options) : null;
     }
     /*
    * Thanks to Dmitry Baranovsky and his Raphael library for inspiration!
@@ -14983,10 +15507,12 @@ function fitBoundsPadding(e) {
                 return document.createElement('<lvml:' + name + ' class="lvml">');
             };
         } catch (e) {
-            return function(name) {
-                return document.createElement('<' + name + ' xmlns="urn:schemas-microsoft.com:vml" class="lvml">');
-            };
+        // Do not return fn from catch block so `e` can be garbage collected
+        // See https://github.com/Leaflet/Leaflet/pull/7279
         }
+        return function(name) {
+            return document.createElement('<' + name + ' xmlns="urn:schemas-microsoft.com:vml" class="lvml">');
+        };
     }();
     /*
    * @class SVG
@@ -15066,7 +15592,7 @@ function fitBoundsPadding(e) {
             toBack(layer._container);
         }
     };
-    var create$2 = vml ? vmlCreate : svgCreate;
+    var create = Browser.vml ? vmlCreate : svgCreate;
     /*
    * @class SVG
    * @inherits Renderer
@@ -15075,7 +15601,7 @@ function fitBoundsPadding(e) {
    * Allows vector layers to be displayed with [SVG](https://developer.mozilla.org/docs/Web/SVG).
    * Inherits `Renderer`.
    *
-   * Due to [technical limitations](http://caniuse.com/#search=svg), SVG is not
+   * Due to [technical limitations](https://caniuse.com/svg), SVG is not
    * available in all web browsers, notably Android 2.x and 3.x.
    *
    * Although SVG is not available on IE7 and IE8, these browsers support
@@ -15102,16 +15628,11 @@ function fitBoundsPadding(e) {
    * var circle = L.circle( center, { renderer: myRenderer } );
    * ```
    */ var SVG = Renderer.extend({
-        getEvents: function() {
-            var events = Renderer.prototype.getEvents.call(this);
-            events.zoomstart = this._onZoomStart;
-            return events;
-        },
         _initContainer: function() {
-            this._container = create$2('svg');
+            this._container = create('svg');
             // makes it possible to click through svg root; we'll reset it back in individual paths
             this._container.setAttribute('pointer-events', 'none');
-            this._rootGroup = create$2('g');
+            this._rootGroup = create('g');
             this._container.appendChild(this._rootGroup);
         },
         _destroyContainer: function() {
@@ -15120,12 +15641,6 @@ function fitBoundsPadding(e) {
             delete this._container;
             delete this._rootGroup;
             delete this._svgSize;
-        },
-        _onZoomStart: function() {
-            // Drag-then-pinch interactions might mess up the center and zoom.
-            // In this case, the easiest way to prevent this is re-do the renderer
-            //   bounds and padding when the zooming starts.
-            this._update();
         },
         _update: function() {
             if (this._map._animatingZoom && this._bounds) return;
@@ -15149,7 +15664,7 @@ function fitBoundsPadding(e) {
         },
         // methods below are called by vector layers implementations
         _initPath: function(layer) {
-            var path = layer._path = create$2('path');
+            var path = layer._path = create('path');
             // @namespace Path
             // @option className: String = null
             // Custom class name set on an element. Only for SVG renderer.
@@ -15212,12 +15727,12 @@ function fitBoundsPadding(e) {
             toBack(layer._path);
         }
     });
-    if (vml) SVG.include(vmlMixin);
+    if (Browser.vml) SVG.include(vmlMixin);
     // @namespace SVG
     // @factory L.svg(options?: Renderer options)
     // Creates a SVG renderer with the given options.
-    function svg$1(options) {
-        return svg || vml ? new SVG(options) : null;
+    function svg(options) {
+        return Browser.svg || Browser.vml ? new SVG(options) : null;
     }
     Map1.include({
         // @namespace Map; @method getRenderer(layer: Path): Renderer
@@ -15248,7 +15763,7 @@ function fitBoundsPadding(e) {
             // @namespace Map; @option preferCanvas: Boolean = false
             // Whether `Path`s should be rendered on a `Canvas` renderer.
             // By default, all `Path`s are rendered in a `SVG` renderer.
-            return this.options.preferCanvas && canvas$1(options) || svg$1(options);
+            return this.options.preferCanvas && canvas(options) || svg(options);
         }
     });
     /*
@@ -15296,7 +15811,7 @@ function fitBoundsPadding(e) {
     function rectangle(latLngBounds, options) {
         return new Rectangle(latLngBounds, options);
     }
-    SVG.create = create$2;
+    SVG.create = create;
     SVG.pointsToPath = pointsToPath;
     GeoJSON.geometryToLayer = geometryToLayer;
     GeoJSON.coordsToLatLng = coordsToLatLng;
@@ -15404,7 +15919,11 @@ function fitBoundsPadding(e) {
             });
         },
         _onKeyDown: function(e) {
-            if (e.keyCode === 27) this._finish();
+            if (e.keyCode === 27) {
+                this._finish();
+                this._clearDeferredResetState();
+                this._resetState();
+            }
         }
     });
     // @section Handlers
@@ -15455,15 +15974,15 @@ function fitBoundsPadding(e) {
     // @section Interaction Options
     Map1.mergeOptions({
         // @option dragging: Boolean = true
-        // Whether the map be draggable with mouse/touch or not.
+        // Whether the map is draggable with mouse/touch or not.
         dragging: true,
         // @section Panning Inertia Options
         // @option inertia: Boolean = *
         // If enabled, panning of the map will have an inertia effect where
         // the map builds momentum while dragging and continues moving in
         // the same direction for some time. Feels especially nice on touch
-        // devices. Enabled by default unless running on old Android devices.
-        inertia: !android23,
+        // devices. Enabled by default.
+        inertia: true,
         // @option inertiaDeceleration: Number = 3000
         // The rate with which the inertial movement slows down, in pixels/second².
         inertiaDeceleration: 3400,
@@ -15576,7 +16095,7 @@ function fitBoundsPadding(e) {
             this._draggable._newPos.x = newX;
         },
         _onDragEnd: function(e) {
-            var map = this._map, options = map.options, noInertia = !options.inertia || this._times.length < 2;
+            var map = this._map, options = map.options, noInertia = !options.inertia || e.noInertia || this._times.length < 2;
             map.fire('dragend', e);
             if (noInertia) map.fire('moveend');
             else {
@@ -15728,8 +16247,11 @@ function fitBoundsPadding(e) {
                 if (!map._panAnim || !map._panAnim._inProgress) {
                     offset = this._panKeys[key];
                     if (e.shiftKey) offset = toPoint(offset).multiplyBy(3);
-                    map.panBy(offset);
-                    if (map.options.maxBounds) map.panInsideBounds(map.options.maxBounds);
+                    if (map.options.maxBounds) offset = map._limitOffset(toPoint(offset), map.options.maxBounds);
+                    if (map.options.worldCopyJump) {
+                        var newLatLng = map.wrapLatLng(map.unproject(map.project(map.getCenter()).add(offset)));
+                        map.panTo(newLatLng);
+                    } else map.panBy(offset);
                 }
             } else if (key in this._zoomKeys) map.setZoom(map.getZoom() + (e.shiftKey ? 3 : 1) * this._zoomKeys[key]);
             else if (key === 27 && map._popup && map._popup.options.closeOnEscapeKey) map.closePopup();
@@ -15798,21 +16320,22 @@ function fitBoundsPadding(e) {
     // Scroll wheel zoom handler.
     Map1.addInitHook('addHandler', 'scrollWheelZoom', ScrollWheelZoom);
     /*
-   * L.Map.Tap is used to enable mobile hacks like quick taps and long hold.
-   */ // @namespace Map
+   * L.Map.TapHold is used to simulate `contextmenu` event on long hold,
+   * which otherwise is not fired by mobile Safari.
+   */ var tapHoldDelay = 600;
+    // @namespace Map
     // @section Interaction Options
     Map1.mergeOptions({
         // @section Touch interaction options
-        // @option tap: Boolean = true
-        // Enables mobile hacks for supporting instant taps (fixing 200ms click
-        // delay on iOS/Android) and touch holds (fired as `contextmenu` events).
-        tap: true,
+        // @option tapHold: Boolean
+        // Enables simulation of `contextmenu` event, default is `true` for mobile Safari.
+        tapHold: Browser.touchNative && Browser.safari && Browser.mobile,
         // @option tapTolerance: Number = 15
         // The max number of pixels a user can shift his finger during touch
         // for it to be considered a valid tap.
         tapTolerance: 15
     });
-    var Tap = Handler.extend({
+    var TapHold = Handler.extend({
         addHooks: function() {
             on(this._map._container, 'touchstart', this._onDown, this);
         },
@@ -15820,67 +16343,56 @@ function fitBoundsPadding(e) {
             off(this._map._container, 'touchstart', this._onDown, this);
         },
         _onDown: function(e) {
-            if (!e.touches) return;
-            preventDefault(e);
-            this._fireClick = true;
-            // don't simulate click or track longpress if more than 1 touch
-            if (e.touches.length > 1) {
-                this._fireClick = false;
-                clearTimeout(this._holdTimeout);
-                return;
-            }
-            var first = e.touches[0], el = first.target;
-            this._startPos = this._newPos = new Point(first.clientX, first.clientY);
-            // if touching a link, highlight it
-            if (el.tagName && el.tagName.toLowerCase() === 'a') addClass(el, 'leaflet-active');
-            // simulate long hold but setting a timeout
-            this._holdTimeout = setTimeout(bind(function() {
-                if (this._isTapValid()) {
-                    this._fireClick = false;
-                    this._onUp();
-                    this._simulateEvent('contextmenu', first);
-                }
-            }, this), 1000);
-            this._simulateEvent('mousedown', first);
-            on(document, {
-                touchmove: this._onMove,
-                touchend: this._onUp
-            }, this);
-        },
-        _onUp: function(e) {
             clearTimeout(this._holdTimeout);
-            off(document, {
-                touchmove: this._onMove,
-                touchend: this._onUp
-            }, this);
-            if (this._fireClick && e && e.changedTouches) {
-                var first = e.changedTouches[0], el = first.target;
-                if (el && el.tagName && el.tagName.toLowerCase() === 'a') removeClass(el, 'leaflet-active');
-                this._simulateEvent('mouseup', first);
-                // simulate click if the touch didn't move too much
-                if (this._isTapValid()) this._simulateEvent('click', first);
-            }
+            if (e.touches.length !== 1) return;
+            var first = e.touches[0];
+            this._startPos = this._newPos = new Point(first.clientX, first.clientY);
+            this._holdTimeout = setTimeout(bind(function() {
+                this._cancel();
+                if (!this._isTapValid()) return;
+                // prevent simulated mouse events https://w3c.github.io/touch-events/#mouse-events
+                on(document, 'touchend', preventDefault);
+                on(document, 'touchend touchcancel', this._cancelClickPrevent);
+                this._simulateEvent('contextmenu', first);
+            }, this), tapHoldDelay);
+            on(document, 'touchend touchcancel contextmenu', this._cancel, this);
+            on(document, 'touchmove', this._onMove, this);
         },
-        _isTapValid: function() {
-            return this._newPos.distanceTo(this._startPos) <= this._map.options.tapTolerance;
+        _cancelClickPrevent: function cancelClickPrevent() {
+            off(document, 'touchend', preventDefault);
+            off(document, 'touchend touchcancel', cancelClickPrevent);
+        },
+        _cancel: function() {
+            clearTimeout(this._holdTimeout);
+            off(document, 'touchend touchcancel contextmenu', this._cancel, this);
+            off(document, 'touchmove', this._onMove, this);
         },
         _onMove: function(e) {
             var first = e.touches[0];
             this._newPos = new Point(first.clientX, first.clientY);
-            this._simulateEvent('mousemove', first);
+        },
+        _isTapValid: function() {
+            return this._newPos.distanceTo(this._startPos) <= this._map.options.tapTolerance;
         },
         _simulateEvent: function(type, e) {
-            var simulatedEvent = document.createEvent('MouseEvents');
+            var simulatedEvent = new MouseEvent(type, {
+                bubbles: true,
+                cancelable: true,
+                view: window,
+                // detail: 1,
+                screenX: e.screenX,
+                screenY: e.screenY,
+                clientX: e.clientX,
+                clientY: e.clientY
+            });
             simulatedEvent._simulated = true;
-            e.target._simulatedClick = true;
-            simulatedEvent.initMouseEvent(type, true, true, window, 1, e.screenX, e.screenY, e.clientX, e.clientY, false, false, false, false, 0, null);
             e.target.dispatchEvent(simulatedEvent);
         }
     });
     // @section Handlers
-    // @property tap: Handler
-    // Mobile touch hacks (quick tap and touch hold) handler.
-    if (touch && (!pointer || safari)) Map1.addInitHook('addHandler', 'tap', Tap);
+    // @property tapHold: Handler
+    // Long tap handler to simulate `contextmenu` event (useful in mobile Safari).
+    Map1.addInitHook('addHandler', 'tapHold', TapHold);
     /*
    * L.Handler.TouchZoom is used by L.Map to add pinch zoom on supported mobile browsers.
    */ // @namespace Map
@@ -15891,8 +16403,8 @@ function fitBoundsPadding(e) {
         // Whether the map can be zoomed by touch-dragging with two fingers. If
         // passed `'center'`, it will zoom to the center of the view regardless of
         // where the touch events (fingers) were. Enabled for touch-capable web
-        // browsers except for old Androids.
-        touchZoom: touch && !android23,
+        // browsers.
+        touchZoom: Browser.touch,
         // @option bounceAtZoomLimits: Boolean = true
         // Set it to false if you don't want the map to zoom beyond min/max zoom
         // and then bounce back when pinch-zooming.
@@ -15920,7 +16432,7 @@ function fitBoundsPadding(e) {
             this._zooming = true;
             map._stop();
             on(document, 'touchmove', this._onTouchMove, this);
-            on(document, 'touchend', this._onTouchEnd, this);
+            on(document, 'touchend touchcancel', this._onTouchEnd, this);
             preventDefault(e);
         },
         _onTouchMove: function(e) {
@@ -15945,7 +16457,7 @@ function fitBoundsPadding(e) {
             var moveFn = bind(map._move, map, this._center, this._zoom, {
                 pinch: true,
                 round: false
-            });
+            }, undefined);
             this._animRequest = requestAnimFrame(moveFn, this, true);
             preventDefault(e);
         },
@@ -15957,7 +16469,7 @@ function fitBoundsPadding(e) {
             this._zooming = false;
             cancelAnimFrame(this._animRequest);
             off(document, 'touchmove', this._onTouchMove, this);
-            off(document, 'touchend', this._onTouchEnd, this);
+            off(document, 'touchend touchcancel', this._onTouchEnd, this);
             // Pinch updates GridLayers' levels only when zoomSnap is off, so zoomSnap becomes noUpdate.
             if (this._map.options.zoomAnimation) this._map._animateZoom(this._center, this._map._limitZoom(this._zoom), true, this._map.options.zoomSnap);
             else this._map._resetView(this._center, this._map._limitZoom(this._zoom));
@@ -15972,86 +16484,86 @@ function fitBoundsPadding(e) {
     Map1.Drag = Drag;
     Map1.Keyboard = Keyboard;
     Map1.ScrollWheelZoom = ScrollWheelZoom;
-    Map1.Tap = Tap;
+    Map1.TapHold = TapHold;
     Map1.TouchZoom = TouchZoom;
-    exports.version = version;
-    exports.Control = Control;
-    exports.control = control;
+    exports.Bounds = Bounds;
     exports.Browser = Browser;
-    exports.Evented = Evented;
-    exports.Mixin = Mixin;
-    exports.Util = Util;
+    exports.CRS = CRS;
+    exports.Canvas = Canvas;
+    exports.Circle = Circle;
+    exports.CircleMarker = CircleMarker;
     exports.Class = Class;
-    exports.Handler = Handler;
-    exports.extend = extend;
-    exports.bind = bind;
-    exports.stamp = stamp;
-    exports.setOptions = setOptions;
+    exports.Control = Control;
+    exports.DivIcon = DivIcon;
+    exports.DivOverlay = DivOverlay;
     exports.DomEvent = DomEvent;
     exports.DomUtil = DomUtil;
-    exports.PosAnimation = PosAnimation;
     exports.Draggable = Draggable;
-    exports.LineUtil = LineUtil;
-    exports.PolyUtil = PolyUtil;
-    exports.Point = Point;
-    exports.point = toPoint;
-    exports.Bounds = Bounds;
-    exports.bounds = toBounds;
-    exports.Transformation = Transformation;
-    exports.transformation = toTransformation;
-    exports.Projection = index;
-    exports.LatLng = LatLng;
-    exports.latLng = toLatLng;
-    exports.LatLngBounds = LatLngBounds;
-    exports.latLngBounds = toLatLngBounds;
-    exports.CRS = CRS;
+    exports.Evented = Evented;
+    exports.FeatureGroup = FeatureGroup;
     exports.GeoJSON = GeoJSON;
-    exports.geoJSON = geoJSON;
-    exports.geoJson = geoJson;
+    exports.GridLayer = GridLayer;
+    exports.Handler = Handler;
+    exports.Icon = Icon;
+    exports.ImageOverlay = ImageOverlay;
+    exports.LatLng = LatLng;
+    exports.LatLngBounds = LatLngBounds;
     exports.Layer = Layer;
     exports.LayerGroup = LayerGroup;
-    exports.layerGroup = layerGroup;
-    exports.FeatureGroup = FeatureGroup;
-    exports.featureGroup = featureGroup;
-    exports.ImageOverlay = ImageOverlay;
-    exports.imageOverlay = imageOverlay;
-    exports.VideoOverlay = VideoOverlay;
-    exports.videoOverlay = videoOverlay;
-    exports.SVGOverlay = SVGOverlay;
-    exports.svgOverlay = svgOverlay;
-    exports.DivOverlay = DivOverlay;
-    exports.Popup = Popup;
-    exports.popup = popup;
-    exports.Tooltip = Tooltip;
-    exports.tooltip = tooltip;
-    exports.Icon = Icon;
-    exports.icon = icon;
-    exports.DivIcon = DivIcon;
-    exports.divIcon = divIcon;
-    exports.Marker = Marker;
-    exports.marker = marker;
-    exports.TileLayer = TileLayer;
-    exports.tileLayer = tileLayer;
-    exports.GridLayer = GridLayer;
-    exports.gridLayer = gridLayer;
-    exports.SVG = SVG;
-    exports.svg = svg$1;
-    exports.Renderer = Renderer;
-    exports.Canvas = Canvas;
-    exports.canvas = canvas$1;
-    exports.Path = Path;
-    exports.CircleMarker = CircleMarker;
-    exports.circleMarker = circleMarker;
-    exports.Circle = Circle;
-    exports.circle = circle;
-    exports.Polyline = Polyline;
-    exports.polyline = polyline;
-    exports.Polygon = Polygon;
-    exports.polygon = polygon;
-    exports.Rectangle = Rectangle;
-    exports.rectangle = rectangle;
+    exports.LineUtil = LineUtil;
     exports.Map = Map1;
+    exports.Marker = Marker;
+    exports.Mixin = Mixin;
+    exports.Path = Path;
+    exports.Point = Point;
+    exports.PolyUtil = PolyUtil;
+    exports.Polygon = Polygon;
+    exports.Polyline = Polyline;
+    exports.Popup = Popup;
+    exports.PosAnimation = PosAnimation;
+    exports.Projection = index;
+    exports.Rectangle = Rectangle;
+    exports.Renderer = Renderer;
+    exports.SVG = SVG;
+    exports.SVGOverlay = SVGOverlay;
+    exports.TileLayer = TileLayer;
+    exports.Tooltip = Tooltip;
+    exports.Transformation = Transformation;
+    exports.Util = Util;
+    exports.VideoOverlay = VideoOverlay;
+    exports.bind = bind;
+    exports.bounds = toBounds;
+    exports.canvas = canvas;
+    exports.circle = circle;
+    exports.circleMarker = circleMarker;
+    exports.control = control;
+    exports.divIcon = divIcon;
+    exports.extend = extend;
+    exports.featureGroup = featureGroup;
+    exports.geoJSON = geoJSON;
+    exports.geoJson = geoJson;
+    exports.gridLayer = gridLayer;
+    exports.icon = icon;
+    exports.imageOverlay = imageOverlay;
+    exports.latLng = toLatLng;
+    exports.latLngBounds = toLatLngBounds;
+    exports.layerGroup = layerGroup;
     exports.map = createMap;
+    exports.marker = marker;
+    exports.point = toPoint;
+    exports.polygon = polygon;
+    exports.polyline = polyline;
+    exports.popup = popup;
+    exports.rectangle = rectangle;
+    exports.setOptions = setOptions;
+    exports.stamp = stamp;
+    exports.svg = svg;
+    exports.svgOverlay = svgOverlay;
+    exports.tileLayer = tileLayer;
+    exports.tooltip = tooltip;
+    exports.transformation = toTransformation;
+    exports.version = version;
+    exports.videoOverlay = videoOverlay;
     var oldL = window.L;
     exports.noConflict = function() {
         window.L = oldL;
@@ -23191,7 +23703,7 @@ exports.default = {
     names: names
 };
 
-},{"../constants/values":"bvPOv","../common/hypot":"f4EiH","@parcel/transformer-js/src/esmodule-helpers.js":"JacNc"}],"fIMh4":[function() {},{}],"fOUvf":[function() {},{}],"fRRd8":[function() {},{}],"7Vi3U":[function(require,module,exports) {
+},{"../constants/values":"bvPOv","../common/hypot":"f4EiH","@parcel/transformer-js/src/esmodule-helpers.js":"JacNc"}],"fIMh4":[function() {},{}],"fOUvf":[function() {},{}],"fRRd8":[function() {},{}],"fRRd8":[function() {},{}],"7Vi3U":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "AlgoliaProvider", ()=>L
@@ -24265,1792 +24777,6 @@ var A = /*#__PURE__*/ function(t3) {
     }, e4;
 }(k);
 
-},{"leaflet":"18D1d","@parcel/transformer-js/src/esmodule-helpers.js":"JacNc"}],"8hjmO":[function(require,module,exports) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "points", ()=>points
-);
-var points = [
-    {
-        "type": "FeatureCollection",
-        "name": "points",
-        "crs": {
-            "type": "name",
-            "properties": {
-                "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
-            }
-        },
-        "features": [
-            {
-                "type": "Feature",
-                "properties": {
-                    "id": 1,
-                    "veldID": 202303201
-                },
-                "geometry": {
-                    "type": "Point",
-                    "coordinates": [
-                        5.449362013968881,
-                        52.16464927918142
-                    ]
-                }
-            },
-            {
-                "type": "Feature",
-                "properties": {
-                    "id": 2,
-                    "veldID": 202303202
-                },
-                "geometry": {
-                    "type": "Point",
-                    "coordinates": [
-                        5.488448576433708,
-                        52.20183934003526
-                    ]
-                }
-            },
-            {
-                "type": "Feature",
-                "properties": {
-                    "id": 3,
-                    "veldID": 202303203
-                },
-                "geometry": {
-                    "type": "Point",
-                    "coordinates": [
-                        5.562218721884272,
-                        52.21043839513725
-                    ]
-                }
-            },
-            {
-                "type": "Feature",
-                "properties": {
-                    "id": 4,
-                    "veldID": 202303204
-                },
-                "geometry": {
-                    "type": "Point",
-                    "coordinates": [
-                        5.515069889128712,
-                        52.20342618666592
-                    ]
-                }
-            },
-            {
-                "type": "Feature",
-                "properties": {
-                    "id": 5,
-                    "veldID": 202303205
-                },
-                "geometry": {
-                    "type": "Point",
-                    "coordinates": [
-                        5.520497106550805,
-                        52.20479806707121
-                    ]
-                }
-            },
-            {
-                "type": "Feature",
-                "properties": {
-                    "id": 6,
-                    "veldID": 202303206
-                },
-                "geometry": {
-                    "type": "Point",
-                    "coordinates": [
-                        5.499403253934243,
-                        52.205602939275664
-                    ]
-                }
-            },
-            {
-                "type": "Feature",
-                "properties": {
-                    "id": 7,
-                    "veldID": 202303207
-                },
-                "geometry": {
-                    "type": "Point",
-                    "coordinates": [
-                        5.504606791489898,
-                        52.19921320602905
-                    ]
-                }
-            }
-        ]
-    }
-];
-
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"JacNc"}],"20FpZ":[function(require,module,exports) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "boundaries", ()=>boundaries
-);
-var boundaries = [
-    {
-        "type": "FeatureCollection",
-        "name": "boundaries",
-        "crs": {
-            "type": "name",
-            "properties": {
-                "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
-            }
-        },
-        "features": [
-            {
-                "type": "Feature",
-                "properties": {
-                    "id": 1,
-                    "veldID": 202303201
-                },
-                "geometry": {
-                    "type": "MultiPolygon",
-                    "coordinates": [
-                        [
-                            [
-                                [
-                                    5.44887297046609,
-                                    52.16218147559452
-                                ],
-                                [
-                                    5.448691826500271,
-                                    52.16215488129428
-                                ],
-                                [
-                                    5.448683434652204,
-                                    52.16225144602477
-                                ],
-                                [
-                                    5.448680402891132,
-                                    52.16228633231147
-                                ],
-                                [
-                                    5.448661361258282,
-                                    52.16250544194169
-                                ],
-                                [
-                                    5.448648632437409,
-                                    52.16265190966118
-                                ],
-                                [
-                                    5.448634788190168,
-                                    52.162811211241056
-                                ],
-                                [
-                                    5.448577258142632,
-                                    52.163169760314126
-                                ],
-                                [
-                                    5.448476472253156,
-                                    52.16344438564838
-                                ],
-                                [
-                                    5.448263411313615,
-                                    52.163630858402286
-                                ],
-                                [
-                                    5.448263860046247,
-                                    52.1640099220976
-                                ],
-                                [
-                                    5.448264027680415,
-                                    52.164151527877294
-                                ],
-                                [
-                                    5.448264976830755,
-                                    52.16495328431867
-                                ],
-                                [
-                                    5.448265158966542,
-                                    52.16510713249619
-                                ],
-                                [
-                                    5.448265452428841,
-                                    52.16535501441625
-                                ],
-                                [
-                                    5.448273823230984,
-                                    52.16546593054891
-                                ],
-                                [
-                                    5.448305974975825,
-                                    52.16589194758931
-                                ],
-                                [
-                                    5.448346471115543,
-                                    52.16642851789183
-                                ],
-                                [
-                                    5.448362122459333,
-                                    52.1666358933571
-                                ],
-                                [
-                                    5.448387841662049,
-                                    52.16697666061856
-                                ],
-                                [
-                                    5.448689488041999,
-                                    52.16695688682573
-                                ],
-                                [
-                                    5.450024605819626,
-                                    52.16686935658236
-                                ],
-                                [
-                                    5.450209242650423,
-                                    52.16685725058095
-                                ],
-                                [
-                                    5.450552561570503,
-                                    52.16683473957061
-                                ],
-                                [
-                                    5.450600459579023,
-                                    52.16682862721504
-                                ],
-                                [
-                                    5.450616823338525,
-                                    52.16680958922444
-                                ],
-                                [
-                                    5.450612112768441,
-                                    52.16646595812273
-                                ],
-                                [
-                                    5.450607702810286,
-                                    52.166144251455705
-                                ],
-                                [
-                                    5.450604645189175,
-                                    52.16592119508133
-                                ],
-                                [
-                                    5.450600526692668,
-                                    52.165917484047704
-                                ],
-                                [
-                                    5.450353397089256,
-                                    52.165694802794
-                                ],
-                                [
-                                    5.450033837473833,
-                                    52.165406852843105
-                                ],
-                                [
-                                    5.449681390686529,
-                                    52.16502298396905
-                                ],
-                                [
-                                    5.449680461212476,
-                                    52.16501895606914
-                                ],
-                                [
-                                    5.449659991940823,
-                                    52.16493025176586
-                                ],
-                                [
-                                    5.449766209280583,
-                                    52.16483150303833
-                                ],
-                                [
-                                    5.449982471902984,
-                                    52.16463044522199
-                                ],
-                                [
-                                    5.449990052292995,
-                                    52.16450632713268
-                                ],
-                                [
-                                    5.449953108652879,
-                                    52.16430668365843
-                                ],
-                                [
-                                    5.44992544634867,
-                                    52.164157195360765
-                                ],
-                                [
-                                    5.44991599498199,
-                                    52.16410611953596
-                                ],
-                                [
-                                    5.449921041693123,
-                                    52.16407595521936
-                                ],
-                                [
-                                    5.450099472666497,
-                                    52.163916767885596
-                                ],
-                                [
-                                    5.450137394044434,
-                                    52.163886719886435
-                                ],
-                                [
-                                    5.450313794892918,
-                                    52.16374694330982
-                                ],
-                                [
-                                    5.450499217428598,
-                                    52.16360001689588
-                                ],
-                                [
-                                    5.450570063327248,
-                                    52.16351780655091
-                                ],
-                                [
-                                    5.450680665415669,
-                                    52.16338946203098
-                                ],
-                                [
-                                    5.450760836767601,
-                                    52.16317660213281
-                                ],
-                                [
-                                    5.450856650802879,
-                                    52.16284552562045
-                                ],
-                                [
-                                    5.45087043422605,
-                                    52.162749206398516
-                                ],
-                                [
-                                    5.45054369904875,
-                                    52.162636577148845
-                                ],
-                                [
-                                    5.450428231036867,
-                                    52.162596773676775
-                                ],
-                                [
-                                    5.450377851121095,
-                                    52.162585081195004
-                                ],
-                                [
-                                    5.450299421752568,
-                                    52.162566878738815
-                                ],
-                                [
-                                    5.450040957917659,
-                                    52.16247349400116
-                                ],
-                                [
-                                    5.449991847596358,
-                                    52.16245575001558
-                                ],
-                                [
-                                    5.449992946777277,
-                                    52.162412231742614
-                                ],
-                                [
-                                    5.449794404760673,
-                                    52.16235154023728
-                                ],
-                                [
-                                    5.449709435638987,
-                                    52.16232556621532
-                                ],
-                                [
-                                    5.449475639117944,
-                                    52.162269953135905
-                                ],
-                                [
-                                    5.448891827229541,
-                                    52.16218424400129
-                                ],
-                                [
-                                    5.44887297046609,
-                                    52.16218147559452
-                                ]
-                            ]
-                        ]
-                    ]
-                }
-            },
-            {
-                "type": "Feature",
-                "properties": {
-                    "id": 2,
-                    "veldID": 202303202
-                },
-                "geometry": {
-                    "type": "MultiPolygon",
-                    "coordinates": [
-                        [
-                            [
-                                [
-                                    5.486863186022273,
-                                    52.20062539544043
-                                ],
-                                [
-                                    5.486880980442864,
-                                    52.20065556247872
-                                ],
-                                [
-                                    5.487191818309338,
-                                    52.20120105754995
-                                ],
-                                [
-                                    5.487448769622626,
-                                    52.201603619902095
-                                ],
-                                [
-                                    5.487541699507545,
-                                    52.20177033931147
-                                ],
-                                [
-                                    5.487659565430684,
-                                    52.201981792941986
-                                ],
-                                [
-                                    5.487809516671122,
-                                    52.20225080511271
-                                ],
-                                [
-                                    5.48791433052063,
-                                    52.202478480009624
-                                ],
-                                [
-                                    5.487992331269924,
-                                    52.20264791029701
-                                ],
-                                [
-                                    5.488145211517585,
-                                    52.20297998720432
-                                ],
-                                [
-                                    5.488196020048377,
-                                    52.203090349141995
-                                ],
-                                [
-                                    5.488321186606926,
-                                    52.203362222882134
-                                ],
-                                [
-                                    5.488725990288815,
-                                    52.20321373824453
-                                ],
-                                [
-                                    5.488763757078781,
-                                    52.20319988501083
-                                ],
-                                [
-                                    5.48882237796371,
-                                    52.20317838223457
-                                ],
-                                [
-                                    5.488827200585408,
-                                    52.20317661324376
-                                ],
-                                [
-                                    5.489071250053144,
-                                    52.20308709280224
-                                ],
-                                [
-                                    5.4895717953407,
-                                    52.20292284362402
-                                ],
-                                [
-                                    5.48957280316437,
-                                    52.202922512911975
-                                ],
-                                [
-                                    5.489917222491807,
-                                    52.20280949297785
-                                ],
-                                [
-                                    5.489985051121121,
-                                    52.20268759726716
-                                ],
-                                [
-                                    5.489947387585691,
-                                    52.20263156573668
-                                ],
-                                [
-                                    5.489932798024115,
-                                    52.202609861007
-                                ],
-                                [
-                                    5.489892394431996,
-                                    52.20254975291636
-                                ],
-                                [
-                                    5.489853059069557,
-                                    52.202491233865324
-                                ],
-                                [
-                                    5.489836132687041,
-                                    52.202466052511085
-                                ],
-                                [
-                                    5.489792675189023,
-                                    52.202401400725854
-                                ],
-                                [
-                                    5.489620621611764,
-                                    52.20214543423264
-                                ],
-                                [
-                                    5.488992506146102,
-                                    52.201136435235306
-                                ],
-                                [
-                                    5.488828655732403,
-                                    52.20089511910944
-                                ],
-                                [
-                                    5.48880090520394,
-                                    52.200854248325385
-                                ],
-                                [
-                                    5.488582540579952,
-                                    52.20053263953625
-                                ],
-                                [
-                                    5.488135653164525,
-                                    52.20064414530022
-                                ],
-                                [
-                                    5.488069695515117,
-                                    52.20066060261716
-                                ],
-                                [
-                                    5.488019058230553,
-                                    52.200673237255096
-                                ],
-                                [
-                                    5.487984042973815,
-                                    52.200681973996936
-                                ],
-                                [
-                                    5.487943968919239,
-                                    52.20062262507415
-                                ],
-                                [
-                                    5.487848277895911,
-                                    52.2004809077279
-                                ],
-                                [
-                                    5.487801627343225,
-                                    52.20045264927895
-                                ],
-                                [
-                                    5.487701158582518,
-                                    52.20047114375532
-                                ],
-                                [
-                                    5.48763749128959,
-                                    52.200482863670594
-                                ],
-                                [
-                                    5.486863186022273,
-                                    52.20062539544043
-                                ]
-                            ]
-                        ]
-                    ]
-                }
-            },
-            {
-                "type": "Feature",
-                "properties": {
-                    "id": 3,
-                    "veldID": 202303203
-                },
-                "geometry": {
-                    "type": "MultiPolygon",
-                    "coordinates": [
-                        [
-                            [
-                                [
-                                    5.560983318241441,
-                                    52.209723951678164
-                                ],
-                                [
-                                    5.561026956256761,
-                                    52.210032732735684
-                                ],
-                                [
-                                    5.561111926877698,
-                                    52.21063396948068
-                                ],
-                                [
-                                    5.561174763594997,
-                                    52.21107858018391
-                                ],
-                                [
-                                    5.561228408862598,
-                                    52.21145814827588
-                                ],
-                                [
-                                    5.561471132118347,
-                                    52.21142124441485
-                                ],
-                                [
-                                    5.561473295031173,
-                                    52.2114208203894
-                                ],
-                                [
-                                    5.561789056333264,
-                                    52.21135891668389
-                                ],
-                                [
-                                    5.56184176494779,
-                                    52.21134858329842
-                                ],
-                                [
-                                    5.562199649223962,
-                                    52.21130149379903
-                                ],
-                                [
-                                    5.562270556233382,
-                                    52.21129216388214
-                                ],
-                                [
-                                    5.562278090562167,
-                                    52.21129151415938
-                                ],
-                                [
-                                    5.562511017849928,
-                                    52.21127142743003
-                                ],
-                                [
-                                    5.562672331940963,
-                                    52.21125962188681
-                                ],
-                                [
-                                    5.56290412756787,
-                                    52.21124265785043
-                                ],
-                                [
-                                    5.562969822146769,
-                                    52.21123784988758
-                                ],
-                                [
-                                    5.563256524228576,
-                                    52.211174307013756
-                                ],
-                                [
-                                    5.563344611880578,
-                                    52.211154783648034
-                                ],
-                                [
-                                    5.563358533863563,
-                                    52.211046896084625
-                                ],
-                                [
-                                    5.563403219153856,
-                                    52.21070060656021
-                                ],
-                                [
-                                    5.563503589727082,
-                                    52.209999016469105
-                                ],
-                                [
-                                    5.563534976147818,
-                                    52.20977962092661
-                                ],
-                                [
-                                    5.56350049529166,
-                                    52.209712804684585
-                                ],
-                                [
-                                    5.563487824455102,
-                                    52.2096882513675
-                                ],
-                                [
-                                    5.562577655514199,
-                                    52.20963873493553
-                                ],
-                                [
-                                    5.562118545044547,
-                                    52.209613754999616
-                                ],
-                                [
-                                    5.562065309920166,
-                                    52.20961085838581
-                                ],
-                                [
-                                    5.562047946103234,
-                                    52.209609913590874
-                                ],
-                                [
-                                    5.561333590683875,
-                                    52.20957065284414
-                                ],
-                                [
-                                    5.561071088608395,
-                                    52.20955622471992
-                                ],
-                                [
-                                    5.560973827098856,
-                                    52.209656792117904
-                                ],
-                                [
-                                    5.560983318241441,
-                                    52.209723951678164
-                                ]
-                            ]
-                        ]
-                    ]
-                }
-            },
-            {
-                "type": "Feature",
-                "properties": {
-                    "id": 4,
-                    "veldID": 202303204
-                },
-                "geometry": {
-                    "type": "MultiPolygon",
-                    "coordinates": [
-                        [
-                            [
-                                [
-                                    5.51051782464608,
-                                    52.20242062596841
-                                ],
-                                [
-                                    5.510315532388032,
-                                    52.20243778952145
-                                ],
-                                [
-                                    5.510205196758094,
-                                    52.20244920660482
-                                ],
-                                [
-                                    5.510131821280106,
-                                    52.20252274642402
-                                ],
-                                [
-                                    5.510113644716603,
-                                    52.20260187971693
-                                ],
-                                [
-                                    5.510097693874966,
-                                    52.20348910708495
-                                ],
-                                [
-                                    5.510107155953531,
-                                    52.20358516461348
-                                ],
-                                [
-                                    5.510236076338912,
-                                    52.20364154043274
-                                ],
-                                [
-                                    5.510364919054838,
-                                    52.20366966121737
-                                ],
-                                [
-                                    5.510732881071316,
-                                    52.203691881674004
-                                ],
-                                [
-                                    5.510784509641266,
-                                    52.20369570392528
-                                ],
-                                [
-                                    5.511426489032803,
-                                    52.2037432300049
-                                ],
-                                [
-                                    5.511560828436838,
-                                    52.2037531744631
-                                ],
-                                [
-                                    5.511726462341143,
-                                    52.20378125503569
-                                ],
-                                [
-                                    5.51235213066451,
-                                    52.20386535956581
-                                ],
-                                [
-                                    5.51282142720475,
-                                    52.2039439763101
-                                ],
-                                [
-                                    5.513088411009321,
-                                    52.2040341083427
-                                ],
-                                [
-                                    5.513705224313378,
-                                    52.20423688661597
-                                ],
-                                [
-                                    5.514119566468703,
-                                    52.2043946714016
-                                ],
-                                [
-                                    5.514303631830948,
-                                    52.204434030472065
-                                ],
-                                [
-                                    5.514423217290513,
-                                    52.204439552799926
-                                ],
-                                [
-                                    5.51464386388355,
-                                    52.204405409212285
-                                ],
-                                [
-                                    5.515158445323534,
-                                    52.20423532239372
-                                ],
-                                [
-                                    5.515213517440636,
-                                    52.20419570565992
-                                ],
-                                [
-                                    5.515204109098653,
-                                    52.20412225254149
-                                ],
-                                [
-                                    5.515130415061646,
-                                    52.204082775101696
-                                ],
-                                [
-                                    5.514900330264951,
-                                    52.20403216479298
-                                ],
-                                [
-                                    5.514578318896437,
-                                    52.20399860612067
-                                ],
-                                [
-                                    5.51419195735873,
-                                    52.20397641781934
-                                ],
-                                [
-                                    5.513814761674126,
-                                    52.2039429161669
-                                ],
-                                [
-                                    5.513547696941292,
-                                    52.203824530595874
-                                ],
-                                [
-                                    5.513547536923598,
-                                    52.20376802053599
-                                ],
-                                [
-                                    5.513729399320575,
-                                    52.20377852235114
-                                ],
-                                [
-                                    5.514500525811314,
-                                    52.203823049320405
-                                ],
-                                [
-                                    5.515276959791118,
-                                    52.203867877700795
-                                ],
-                                [
-                                    5.515258743140778,
-                                    52.20393005866128
-                                ],
-                                [
-                                    5.515295646854285,
-                                    52.203969575901134
-                                ],
-                                [
-                                    5.515406179779294,
-                                    52.204025966508546
-                                ],
-                                [
-                                    5.515811246943453,
-                                    52.20415549958156
-                                ],
-                                [
-                                    5.516161081796372,
-                                    52.204268139073285
-                                ],
-                                [
-                                    5.516446387677814,
-                                    52.20432998849601
-                                ],
-                                [
-                                    5.516812605988886,
-                                    52.20436851883033
-                                ],
-                                [
-                                    5.516924811778192,
-                                    52.20438032366986
-                                ],
-                                [
-                                    5.517412335651882,
-                                    52.20439674101215
-                                ],
-                                [
-                                    5.518122903483571,
-                                    52.20443233160237
-                                ],
-                                [
-                                    5.518185052970083,
-                                    52.20443544420352
-                                ],
-                                [
-                                    5.519089219706768,
-                                    52.20447828918111
-                                ],
-                                [
-                                    5.519151169712627,
-                                    52.2044812245491
-                                ],
-                                [
-                                    5.519233734534341,
-                                    52.20448513670521
-                                ],
-                                [
-                                    5.519353270528356,
-                                    52.204473701336255
-                                ],
-                                [
-                                    5.519435965632154,
-                                    52.20444535362889
-                                ],
-                                [
-                                    5.519609580564397,
-                                    52.20406088944827
-                                ],
-                                [
-                                    5.519563425118065,
-                                    52.20400443095128
-                                ],
-                                [
-                                    5.51964593471471,
-                                    52.203913922088326
-                                ],
-                                [
-                                    5.519709881135729,
-                                    52.203766923794454
-                                ],
-                                [
-                                    5.519773810347383,
-                                    52.20361427449091
-                                ],
-                                [
-                                    5.519856117204005,
-                                    52.20345595355793
-                                ],
-                                [
-                                    5.519947620884847,
-                                    52.203297622310444
-                                ],
-                                [
-                                    5.520029876079399,
-                                    52.203122348351044
-                                ],
-                                [
-                                    5.52002057778784,
-                                    52.203088452626076
-                                ],
-                                [
-                                    5.519956028122968,
-                                    52.203032014734646
-                                ],
-                                [
-                                    5.519607088566311,
-                                    52.2029953417324
-                                ],
-                                [
-                                    5.517508773255726,
-                                    52.2027747907067
-                                ],
-                                [
-                                    5.517352435645861,
-                                    52.20278061419538
-                                ],
-                                [
-                                    5.517242216251133,
-                                    52.20283159449898
-                                ],
-                                [
-                                    5.517159917736829,
-                                    52.20299556462009
-                                ],
-                                [
-                                    5.517077750203055,
-                                    52.203204742785424
-                                ],
-                                [
-                                    5.51707211858241,
-                                    52.2032222058531
-                                ],
-                                [
-                                    5.517041289518031,
-                                    52.203317803321646
-                                ],
-                                [
-                                    5.516903311919425,
-                                    52.20331230387228
-                                ],
-                                [
-                                    5.516599748210631,
-                                    52.20329568360963
-                                ],
-                                [
-                                    5.516535218945095,
-                                    52.203244894921
-                                ],
-                                [
-                                    5.516553335250123,
-                                    52.203148807709766
-                                ],
-                                [
-                                    5.516580419443717,
-                                    52.20297359635446
-                                ],
-                                [
-                                    5.516580009820408,
-                                    52.20283232118882
-                                ],
-                                [
-                                    5.516515448494358,
-                                    52.20277023047897
-                                ],
-                                [
-                                    5.516349815333391,
-                                    52.202742156383444
-                                ],
-                                [
-                                    5.514347875181764,
-                                    52.202631817808324
-                                ],
-                                [
-                                    5.514122696098414,
-                                    52.202619405037055
-                                ],
-                                [
-                                    5.513381146265048,
-                                    52.202578523810516
-                                ],
-                                [
-                                    5.512401437619337,
-                                    52.20252450529184
-                                ],
-                                [
-                                    5.51051782464608,
-                                    52.20242062596841
-                                ]
-                            ]
-                        ]
-                    ]
-                }
-            },
-            {
-                "type": "Feature",
-                "properties": {
-                    "id": 5,
-                    "veldID": 202303205
-                },
-                "geometry": {
-                    "type": "MultiPolygon",
-                    "coordinates": [
-                        [
-                            [
-                                [
-                                    5.522833794400761,
-                                    52.20442062122273
-                                ],
-                                [
-                                    5.522470863975274,
-                                    52.20443631191759
-                                ],
-                                [
-                                    5.522400635905384,
-                                    52.20443923127644
-                                ],
-                                [
-                                    5.522135823429648,
-                                    52.20445023908203
-                                ],
-                                [
-                                    5.522093016431044,
-                                    52.20445201849592
-                                ],
-                                [
-                                    5.521692329117641,
-                                    52.20446536539902
-                                ],
-                                [
-                                    5.521317457112565,
-                                    52.20447785113262
-                                ],
-                                [
-                                    5.521143401186542,
-                                    52.204483647990486
-                                ],
-                                [
-                                    5.52039584291389,
-                                    52.204514569532364
-                                ],
-                                [
-                                    5.520308156485773,
-                                    52.20451819610012
-                                ],
-                                [
-                                    5.519477837505641,
-                                    52.204537457967035
-                                ],
-                                [
-                                    5.518188130459402,
-                                    52.20447832197359
-                                ],
-                                [
-                                    5.517851672526243,
-                                    52.20446289233069
-                                ],
-                                [
-                                    5.517632927510117,
-                                    52.20447535378046
-                                ],
-                                [
-                                    5.517538623534884,
-                                    52.20453350232464
-                                ],
-                                [
-                                    5.517548826937714,
-                                    52.20462208513477
-                                ],
-                                [
-                                    5.517673884989176,
-                                    52.204878564343424
-                                ],
-                                [
-                                    5.517783893275895,
-                                    52.20508923563951
-                                ],
-                                [
-                                    5.517878672302503,
-                                    52.20519299987302
-                                ],
-                                [
-                                    5.518003142771623,
-                                    52.2052478516443
-                                ],
-                                [
-                                    5.518724065350541,
-                                    52.2052226119753
-                                ],
-                                [
-                                    5.518779006248897,
-                                    52.205220738350654
-                                ],
-                                [
-                                    5.519100876340605,
-                                    52.20520976089193
-                                ],
-                                [
-                                    5.51932433274646,
-                                    52.20520213933917
-                                ],
-                                [
-                                    5.519464876593967,
-                                    52.205197345568045
-                                ],
-                                [
-                                    5.520185779313653,
-                                    52.20516598703569
-                                ],
-                                [
-                                    5.52051885489951,
-                                    52.20514117214316
-                                ],
-                                [
-                                    5.520626618920382,
-                                    52.2051287132413
-                                ],
-                                [
-                                    5.521025861986313,
-                                    52.205082554821
-                                ],
-                                [
-                                    5.521334074705773,
-                                    52.20505776577907
-                                ],
-                                [
-                                    5.521602554273661,
-                                    52.20504829602668
-                                ],
-                                [
-                                    5.521628679413151,
-                                    52.20504826635823
-                                ],
-                                [
-                                    5.521890950801566,
-                                    52.205047967653464
-                                ],
-                                [
-                                    5.522134577664879,
-                                    52.205041579906975
-                                ],
-                                [
-                                    5.52322339259393,
-                                    52.204997562558965
-                                ],
-                                [
-                                    5.523355854841632,
-                                    52.20499001022291
-                                ],
-                                [
-                                    5.523387452107409,
-                                    52.20498820867223
-                                ],
-                                [
-                                    5.523501704108483,
-                                    52.20495141735178
-                                ],
-                                [
-                                    5.523586028515768,
-                                    52.204884110846564
-                                ],
-                                [
-                                    5.523635462307398,
-                                    52.204789349844575
-                                ],
-                                [
-                                    5.523641344712132,
-                                    52.20474821044523
-                                ],
-                                [
-                                    5.523669539825266,
-                                    52.20455102302326
-                                ],
-                                [
-                                    5.523651849407517,
-                                    52.20448655663695
-                                ],
-                                [
-                                    5.52364942643371,
-                                    52.20447772696282
-                                ],
-                                [
-                                    5.523589581539277,
-                                    52.20441975154388
-                                ],
-                                [
-                                    5.523519894905323,
-                                    52.20439539212423
-                                ],
-                                [
-                                    5.523405504468494,
-                                    52.20438635924052
-                                ],
-                                [
-                                    5.523076128912358,
-                                    52.20440609855653
-                                ],
-                                [
-                                    5.522862495030158,
-                                    52.20441890130123
-                                ],
-                                [
-                                    5.522833794400761,
-                                    52.20442062122273
-                                ]
-                            ]
-                        ]
-                    ]
-                }
-            },
-            {
-                "type": "Feature",
-                "properties": {
-                    "id": 6,
-                    "veldID": 202303206
-                },
-                "geometry": {
-                    "type": "MultiPolygon",
-                    "coordinates": [
-                        [
-                            [
-                                [
-                                    5.497400773343085,
-                                    52.20426419487748
-                                ],
-                                [
-                                    5.497063577664477,
-                                    52.20440486041699
-                                ],
-                                [
-                                    5.496961621227541,
-                                    52.20431845213074
-                                ],
-                                [
-                                    5.496598307918518,
-                                    52.204508411585806
-                                ],
-                                [
-                                    5.496486002883576,
-                                    52.20456713017235
-                                ],
-                                [
-                                    5.496447116928308,
-                                    52.204587461623284
-                                ],
-                                [
-                                    5.497090588820408,
-                                    52.20509838781512
-                                ],
-                                [
-                                    5.497358323185543,
-                                    52.20531096849382
-                                ],
-                                [
-                                    5.497670853787365,
-                                    52.20555858920367
-                                ],
-                                [
-                                    5.498023311301414,
-                                    52.20583783985905
-                                ],
-                                [
-                                    5.498640828009626,
-                                    52.20633238966211
-                                ],
-                                [
-                                    5.498679430208843,
-                                    52.20636295972505
-                                ],
-                                [
-                                    5.498946946776774,
-                                    52.206574811646256
-                                ],
-                                [
-                                    5.499063280546271,
-                                    52.20668478888856
-                                ],
-                                [
-                                    5.499115090543001,
-                                    52.20672652134536
-                                ],
-                                [
-                                    5.499348124932411,
-                                    52.20691422728457
-                                ],
-                                [
-                                    5.499907557324875,
-                                    52.20734086662812
-                                ],
-                                [
-                                    5.500168688116631,
-                                    52.207575499040516
-                                ],
-                                [
-                                    5.500261030335042,
-                                    52.20755735048622
-                                ],
-                                [
-                                    5.500629537786843,
-                                    52.20746962137885
-                                ],
-                                [
-                                    5.500812683938706,
-                                    52.207421906971256
-                                ],
-                                [
-                                    5.500829682086807,
-                                    52.207443700497535
-                                ],
-                                [
-                                    5.500852968811769,
-                                    52.207436685999824
-                                ],
-                                [
-                                    5.500954419939303,
-                                    52.20740612655894
-                                ],
-                                [
-                                    5.500937538745471,
-                                    52.20738546628533
-                                ],
-                                [
-                                    5.501092741299323,
-                                    52.207336493973706
-                                ],
-                                [
-                                    5.501297208733996,
-                                    52.20728637089063
-                                ],
-                                [
-                                    5.501385419901611,
-                                    52.20726474679732
-                                ],
-                                [
-                                    5.50139901865194,
-                                    52.20728494727498
-                                ],
-                                [
-                                    5.501447366586938,
-                                    52.207270632303015
-                                ],
-                                [
-                                    5.501433773909095,
-                                    52.20725281001429
-                                ],
-                                [
-                                    5.501663939757873,
-                                    52.207196703622095
-                                ],
-                                [
-                                    5.501788196039922,
-                                    52.20715273623824
-                                ],
-                                [
-                                    5.50193660788722,
-                                    52.20711083017888
-                                ],
-                                [
-                                    5.502315264298338,
-                                    52.207018189457656
-                                ],
-                                [
-                                    5.502315260355323,
-                                    52.20701666144274
-                                ],
-                                [
-                                    5.502321534774845,
-                                    52.20701665532613
-                                ],
-                                [
-                                    5.502365989882259,
-                                    52.20700577895989
-                                ],
-                                [
-                                    5.502403171390545,
-                                    52.20699439812716
-                                ],
-                                [
-                                    5.502403159031307,
-                                    52.20698961227032
-                                ],
-                                [
-                                    5.502418856912545,
-                                    52.20698959696725
-                                ],
-                                [
-                                    5.502623190112011,
-                                    52.206927052806705
-                                ],
-                                [
-                                    5.502618301676368,
-                                    52.20690981352289
-                                ],
-                                [
-                                    5.50224556370304,
-                                    52.20661112213654
-                                ],
-                                [
-                                    5.502148721757758,
-                                    52.20653351754
-                                ],
-                                [
-                                    5.501857291312108,
-                                    52.206299976832774
-                                ],
-                                [
-                                    5.501518692464708,
-                                    52.206028633196546
-                                ],
-                                [
-                                    5.501386742126116,
-                                    52.205923263455304
-                                ],
-                                [
-                                    5.501213856992332,
-                                    52.205785203628814
-                                ],
-                                [
-                                    5.501195632367185,
-                                    52.20577065005132
-                                ],
-                                [
-                                    5.501185152900783,
-                                    52.205762281494785
-                                ],
-                                [
-                                    5.500703354638775,
-                                    52.205377528924345
-                                ],
-                                [
-                                    5.499483270649665,
-                                    52.20440316038985
-                                ],
-                                [
-                                    5.499177685203155,
-                                    52.20415910882465
-                                ],
-                                [
-                                    5.499158673211974,
-                                    52.20414392504018
-                                ],
-                                [
-                                    5.49866035979541,
-                                    52.20376153322357
-                                ],
-                                [
-                                    5.498534021632175,
-                                    52.203649847363685
-                                ],
-                                [
-                                    5.498524211499778,
-                                    52.20364985661999
-                                ],
-                                [
-                                    5.498524189787751,
-                                    52.203641155762284
-                                ],
-                                [
-                                    5.498442616877161,
-                                    52.2035690428941
-                                ],
-                                [
-                                    5.498436048117533,
-                                    52.20356904906919
-                                ],
-                                [
-                                    5.498436033590837,
-                                    52.203563223057515
-                                ],
-                                [
-                                    5.498419861207527,
-                                    52.2035489262577
-                                ],
-                                [
-                                    5.49808613329814,
-                                    52.20358906854809
-                                ],
-                                [
-                                    5.4977610438151,
-                                    52.2036000739409
-                                ],
-                                [
-                                    5.497559713133144,
-                                    52.20361619662423
-                                ],
-                                [
-                                    5.497505643979416,
-                                    52.203620526185226
-                                ],
-                                [
-                                    5.497077619948301,
-                                    52.203658259765746
-                                ],
-                                [
-                                    5.497011607729255,
-                                    52.20375318669485
-                                ],
-                                [
-                                    5.49701924471764,
-                                    52.203809258222876
-                                ],
-                                [
-                                    5.497097625671714,
-                                    52.203872710511014
-                                ],
-                                [
-                                    5.497237554413051,
-                                    52.2039859875648
-                                ],
-                                [
-                                    5.49727550298946,
-                                    52.204016708098564
-                                ],
-                                [
-                                    5.497290880036698,
-                                    52.204029156233645
-                                ],
-                                [
-                                    5.497513297132481,
-                                    52.20421725368672
-                                ],
-                                [
-                                    5.497400773343085,
-                                    52.20426419487748
-                                ]
-                            ]
-                        ]
-                    ]
-                }
-            },
-            {
-                "type": "Feature",
-                "properties": {
-                    "id": 7,
-                    "veldID": 202303207
-                },
-                "geometry": {
-                    "type": "MultiPolygon",
-                    "coordinates": [
-                        [
-                            [
-                                [
-                                    5.50326956590056,
-                                    52.19830444198145
-                                ],
-                                [
-                                    5.503164248937678,
-                                    52.19833847238639
-                                ],
-                                [
-                                    5.503119187448484,
-                                    52.19838169645985
-                                ],
-                                [
-                                    5.503139464996289,
-                                    52.198458783403744
-                                ],
-                                [
-                                    5.503167751341702,
-                                    52.198509410390244
-                                ],
-                                [
-                                    5.503699225391474,
-                                    52.19946062184784
-                                ],
-                                [
-                                    5.504026941452454,
-                                    52.20005658482889
-                                ],
-                                [
-                                    5.504107746059212,
-                                    52.20020352820716
-                                ],
-                                [
-                                    5.504173128997065,
-                                    52.200252811860665
-                                ],
-                                [
-                                    5.504243483052639,
-                                    52.200283584957894
-                                ],
-                                [
-                                    5.504348941437657,
-                                    52.200301986076845
-                                ],
-                                [
-                                    5.504534639207835,
-                                    52.200292549036604
-                                ],
-                                [
-                                    5.50480566863932,
-                                    52.20028302684248
-                                ],
-                                [
-                                    5.505016496374082,
-                                    52.20028590113953
-                                ],
-                                [
-                                    5.505227405719086,
-                                    52.20031961767916
-                                ],
-                                [
-                                    5.505433230479488,
-                                    52.20032866475396
-                                ],
-                                [
-                                    5.505628934421932,
-                                    52.200306878891325
-                                ],
-                                [
-                                    5.505814566349415,
-                                    52.20027276572722
-                                ],
-                                [
-                                    5.505860462716526,
-                                    52.20025042667991
-                                ],
-                                [
-                                    5.505909814009951,
-                                    52.20022640599836
-                                ],
-                                [
-                                    5.505959836698083,
-                                    52.2001615860421
-                                ],
-                                [
-                                    5.50591674984015,
-                                    52.2000426231814
-                                ],
-                                [
-                                    5.505691837488532,
-                                    52.19942162945945
-                                ],
-                                [
-                                    5.505637332057338,
-                                    52.19925953435086
-                                ],
-                                [
-                                    5.505513491747163,
-                                    52.19889123795316
-                                ],
-                                [
-                                    5.505365929235691,
-                                    52.198452384496974
-                                ],
-                                [
-                                    5.505339313920205,
-                                    52.198373229128435
-                                ],
-                                [
-                                    5.505312393168248,
-                                    52.19829316509064
-                                ],
-                                [
-                                    5.505251965852072,
-                                    52.198219202892986
-                                ],
-                                [
-                                    5.50515148237609,
-                                    52.198182291938494
-                                ],
-                                [
-                                    5.504980786217139,
-                                    52.19816704084169
-                                ],
-                                [
-                                    5.504636631122606,
-                                    52.19817493657383
-                                ],
-                                [
-                                    5.504559191332659,
-                                    52.1981767130571
-                                ],
-                                [
-                                    5.504157624875051,
-                                    52.198167858376344
-                                ],
-                                [
-                                    5.503906709444707,
-                                    52.19818661206186
-                                ],
-                                [
-                                    5.503675895079398,
-                                    52.19821459826207
-                                ],
-                                [
-                                    5.503660140427394,
-                                    52.19821727722835
-                                ],
-                                [
-                                    5.503475212208628,
-                                    52.19824872289568
-                                ],
-                                [
-                                    5.50326956590056,
-                                    52.19830444198145
-                                ]
-                            ]
-                        ]
-                    ]
-                }
-            }
-        ]
-    }
-];
-
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"JacNc"}]},["hor7Q","29JuH"], "29JuH", "parcelRequire5191")
+},{"leaflet":"18D1d","@parcel/transformer-js/src/esmodule-helpers.js":"JacNc"}]},["hor7Q","29JuH"], "29JuH", "parcelRequire5191")
 
 //# sourceMappingURL=index.36efa996.js.map
