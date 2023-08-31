@@ -654,16 +654,38 @@ function resetHighlight(e) {
     });
 }
 var pane = map.createPane("fixed", document.getElementById("map"));
-function onEachFeature(feature, layer) {
-    layer.veldID = feature.properties.veldID;
-    console.log(feature);
+function openIframePopup() {
+    const popupContent = `\n    <h3>Veld: ${feature.properties.veldID}</h3>\n    <br>Grab the lower right corner and reduce the width of the map.\n    <button onclick="openIframePopup()">Open Iframe</button>\n  `;
     const popup = L.popup({
         pane: "fixed",
         className: "popup-fixed test",
         autoPan: false
-    }).setContent("<h3>Veld: " + feature.properties.veldID + "</h3>" + "<br>Grab the lower right corner and reduce the width of the map. <button>Button</button>");
-    // layer.bindPopup("<h3>Second popup 😀</h3><br>Grab the lower right corner and reduce the width of the map.").on("click");
-    layer.bindPopup(popup).on("click", fitBoundsPadding);
+    }).setContent(popupContent);
+    const iframeUrl = "https://therightplace.fibery.io/@public/forms/pUs2DImJ"; // Replace with your iframe URL
+    // Create a new popup window with the iframe content
+    const iframePopup = window.open(iframeUrl, "Iframe Popup", "width=800,height=600,resizable=yes,scrollbars=yes");
+    if (!iframePopup) alert("Popup was blocked. Please allow popups for this website.");
+}
+function onEachFeature(feature, layer) {
+    layer.veldID = feature.properties.veldID;
+    const popupContentElement = document.getElementById("popupContent");
+    console.log(popupContentElement);
+    if (popupContentElement) {
+        // Get the innerHTML of the HTML element
+        const popupContent = popupContentElement.innerHTML;
+        console.log(popupContent);
+        const popup = L.popup({
+            pane: "fixed",
+            className: "popup-fixed test",
+            autoPan: false
+        }).setContent(popupContent);
+        // Get the <h1> element by its ID
+        const veldIDElement = document.getElementById("veldID");
+        // Update the content of the <h1> element with feature.properties.veldID
+        if (veldIDElement) veldIDElement.textContent = "VeldID: " + feature.properties.veldID;
+        // Add the popup to the layer
+        layer.bindPopup(popup).on("click", fitBoundsPadding);
+    }
     layer.on({
         mouseover: function(e) {
             this.setStyle({
@@ -752,17 +774,16 @@ function fitBoundsPadding(e) {
             });
         }
     } else console.error("boundaries is null");
-}
-// var wmsLayer = L.tileLayer.wms('https://protoklipenklaar.webgis1.com/geoserver/bodem/wms??', {
-//   layers: 'totalcounts'
-// }).addTo(map);
-// add a wmts layer from the totalcounts layer found in this geoserver https://protoklipenklaar.webgis1.com/geoserver/bodem/wms?service=WMS&version=1.1.1&request=GetCapabilities&format=text/xml;subtype=gml/3.1.1
-//can you give me a working alternative for the code below?
-var wmsLayer = L.tileLayer.wms('https://protoklipenklaar.webgis1.com/geoserver/bodem/wms??', {
-    layers: 'totalcounts',
-    format: 'image/png',
-    transparent: true
-}).addTo(map);
+} // var wmsLayer = L.tileLayer.wms('https://protoklipenklaar.webgis1.com/geoserver/bodem/wms??', {
+ //   layers: 'totalcounts'
+ // }).addTo(map);
+ // add a wmts layer from the totalcounts layer found in this geoserver https://protoklipenklaar.webgis1.com/geoserver/bodem/wms?service=WMS&version=1.1.1&request=GetCapabilities&format=text/xml;subtype=gml/3.1.1
+ //can you give me a working alternative for the code below?
+ // var wmsLayer = L.tileLayer.wms('https://protoklipenklaar.webgis1.com/geoserver/bodem/wms??', { // eslint-disable-line no-undef
+ //   layers: 'totalcounts',
+ //   format: 'image/png',
+ //   transparent: true,
+ // }).addTo(map);
 
 },{"leaflet/dist/leaflet.css":"1JjJC","leaflet/dist/leaflet":"9HYFf","leaflet.control.layers.tree":"fZXae","proj4leaflet":"2TgW9","leaflet.control.layers.tree/L.Control.Layers.Tree.css":"fIMh4","./index.css":"fOUvf","./node_modules/leaflet-geosearch/dist/geosearch.css":"fRRd8","leaflet-geosearch/dist/geosearch.css":"fRRd8","leaflet-geosearch":"7Vi3U"}],"1JjJC":[function() {},{}],"9HYFf":[function(require,module,exports) {
 /* @preserve

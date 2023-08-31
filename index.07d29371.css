@@ -965,6 +965,9 @@ body {
     fill: red;
 }
 
+.iframe-popup {
+    max-height: 80vh; /* Set the maximum height as needed */
+}
 /* global styling */
 .leaflet-control-geosearch *,
 .leaflet-control-geosearch *:before,
