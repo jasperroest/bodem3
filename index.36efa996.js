@@ -476,7 +476,7 @@ const fieldBoundariesWfsUrl = geoServerBaseUrl + "/ows?service=WFS&version=1.0.0
 const wfsStyle = {
     color: "red",
     weight: 2,
-    opacity: 1 // Line opacity
+    opacity: 0 // Line opacity
 };
 function getBaseLayer(attribution) {
     return L.tileLayer(`https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/standaard/EPSG:28992/{z}/{x}/{y}.png`, {
@@ -761,12 +761,7 @@ var wmsLayer = L.tileLayer.wms('https://protoklipenklaar.webgis1.com/geoserver/b
     layers: 'totalcounts',
     format: 'image/png',
     transparent: true
-}).addTo(map); // var wmsLayer = L.tileLayer.wms('https://protoklipenklaar.webgis1.com/geoserver/bodem/wms??', {
- //   crs: RD,
- //   layers: 'totalcounts',
- //   format: 'image/png',
- //   transparent: true
- // }).addTo(map);
+}).addTo(map);
 
 },{"leaflet/dist/leaflet.css":"1JjJC","leaflet/dist/leaflet":"9HYFf","leaflet.control.layers.tree":"fZXae","proj4leaflet":"2TgW9","leaflet.control.layers.tree/L.Control.Layers.Tree.css":"fIMh4","./index.css":"fOUvf","./node_modules/leaflet-geosearch/dist/geosearch.css":"fRRd8","leaflet-geosearch/dist/geosearch.css":"fRRd8","leaflet-geosearch":"7Vi3U"}],"1JjJC":[function() {},{}],"9HYFf":[function(require,module,exports) {
 /* @preserve
