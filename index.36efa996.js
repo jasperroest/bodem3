@@ -476,7 +476,8 @@ const fieldBoundariesWfsUrl = geoServerBaseUrl + "/ows?service=WFS&version=1.0.0
 const wfsStyle = {
     color: "red",
     weight: 2,
-    opacity: 0 // Line opacity
+    opacity: 1,
+    fillOpacity: 0
 };
 function getBaseLayer(attribution) {
     return L.tileLayer(`https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/standaard/EPSG:28992/{z}/{x}/{y}.png`, {
