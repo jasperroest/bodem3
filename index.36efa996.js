@@ -505,23 +505,6 @@ fetch(fieldBoundariesWfsUrl).then((response)=>response.json()
 }).catch((error)=>{
     console.error("Error fetching WFS data:", error);
 });
-let points;
-// // Retrieve WFS data and add it to the map
-// fetch(fieldPointsWfsUrl)
-//     .then(response => response.json())
-//     .then(data => {
-//       // Create a Leaflet GeoJSON layer with the retrieved data and custom style
-//       points = L.geoJSON(data, {
-//         style: wfsStyle   // Apply the defined style to the layer
-//       });
-//
-//       // Set the minimum zoom for the boundaries layer
-//       boundaries.options.minZoom = 10;
-//
-//     })
-//     .catch(error => {
-//       console.error("Error fetching WFS data:", error);
-//     });
 let fieldpoints;
 // Inside the fetch for fieldPointsWfsUrl
 fetch(fieldPointsWfsUrl).then((response)=>response.json()
@@ -573,8 +556,23 @@ var res = [
     0.84,
     0.42
 ];
+const RD = new L.Proj.CRS('EPSG:28992', '+proj=sterea +lat_0=52.15616055555555 +lon_0=5.38763888888889 +k=0.9999079 +x_0=155000 +y_0=463000 +ellps=bessel +units=m +towgs84=565.2369,50.0087,465.658,-0.406857330322398,0.350732676542563,-1.8703473836068,4.0812 +no_defs', {
+    transformation: L.Transformation(-1, -1, 0, 0),
+    resolutions: res,
+    origin: [
+        -285401.92,
+        903401.92
+    ],
+    bounds: L.bounds([
+        -285401.92,
+        903401.92
+    ], [
+        595401.92,
+        22598.08
+    ]) // eslint-disable-line no-undef
+});
 // Projection parameters for RD projection (EPSG:28992):
-const map = L.map('mapid', {
+const map = L.map('map', {
     continuousWorld: true,
     crs: new L.Proj.CRS('EPSG:28992', '+proj=sterea +lat_0=52.15616055555555 +lon_0=5.38763888888889 +k=0.9999079 +x_0=155000 +y_0=463000 +ellps=bessel +units=m +towgs84=565.2369,50.0087,465.658,-0.406857330322398,0.350732676542563,-1.8703473836068,4.0812 +no_defs', {
         transformation: L.Transformation(-1, -1, 0, 0),
@@ -601,13 +599,13 @@ const map = L.map('mapid', {
     zoom: 3,
     zoomControl: false
 });
-new L.Control.Zoom({
-    position: 'topright'
-}).addTo(map);
 var baseLayers = {
     'BRT-Achtergrondkaart [WMTS]': brtRegular,
     'Luchtfoto [WMTS]': luchtfoto
 };
+new L.Control.Zoom({
+    position: 'topright'
+}).addTo(map);
 L.control.layers(baseLayers).addTo(map) // eslint-disable-line no-undef
 ;
 const provider = new _leafletGeosearch.OpenStreetMapProvider();
@@ -654,7 +652,7 @@ function resetHighlight(e) {
         fillColor: 'red'
     });
 }
-var pane = map.createPane("fixed", document.getElementById("mapid"));
+var pane = map.createPane("fixed", document.getElementById("map"));
 function onEachFeature(feature, layer) {
     layer.veldID = feature.properties.veldID;
     console.log(feature);
@@ -754,6 +752,21 @@ function fitBoundsPadding(e) {
         }
     } else console.error("boundaries is null");
 }
+// var wmsLayer = L.tileLayer.wms('https://protoklipenklaar.webgis1.com/geoserver/bodem/wms??', {
+//   layers: 'totalcounts'
+// }).addTo(map);
+// add a wmts layer from the totalcounts layer found in this geoserver https://protoklipenklaar.webgis1.com/geoserver/bodem/wms?service=WMS&version=1.1.1&request=GetCapabilities&format=text/xml;subtype=gml/3.1.1
+//can you give me a working alternative for the code below?
+var wmsLayer = L.tileLayer.wms('https://protoklipenklaar.webgis1.com/geoserver/bodem/wms??', {
+    layers: 'totalcounts',
+    format: 'image/png',
+    transparent: true
+}).addTo(map); // var wmsLayer = L.tileLayer.wms('https://protoklipenklaar.webgis1.com/geoserver/bodem/wms??', {
+ //   crs: RD,
+ //   layers: 'totalcounts',
+ //   format: 'image/png',
+ //   transparent: true
+ // }).addTo(map);
 
 },{"leaflet/dist/leaflet.css":"1JjJC","leaflet/dist/leaflet":"9HYFf","leaflet.control.layers.tree":"fZXae","proj4leaflet":"2TgW9","leaflet.control.layers.tree/L.Control.Layers.Tree.css":"fIMh4","./index.css":"fOUvf","./node_modules/leaflet-geosearch/dist/geosearch.css":"fRRd8","leaflet-geosearch/dist/geosearch.css":"fRRd8","leaflet-geosearch":"7Vi3U"}],"1JjJC":[function() {},{}],"9HYFf":[function(require,module,exports) {
 /* @preserve
