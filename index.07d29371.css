@@ -816,7 +816,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     cursor: pointer;
 }
 
-#mapid {
+#map {
     height: 100vh;
 }
 
@@ -831,8 +831,6 @@ body {
 .leaflet-container {
     background: white;
 }
-
-
 
 /* Adjust zoom controls */
 .leaflet-control-zoom {
