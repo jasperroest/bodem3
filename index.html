@@ -13,7 +13,6 @@
             left: 0;
             width: 100%;
             height: 100%;
-            /*background-color: rgba(0, 0, 0, 0.5);*/
             z-index: 1000;
         }
 
@@ -26,6 +25,11 @@
             background-color: white;
             padding: 20px;
             border-radius: 5px;
+        }
+
+        /* Initially hide the popup content */
+        #popupContent {
+            display: none;
         }
     
 </style>
@@ -486,9 +490,17 @@ function hmrAcceptRun(bundle, id) {
 }
 
 },{}]},["3Eio3"], null, "parcelRequire5191")
+function togglePopup() {
+    var popup = document.getElementById('popupContent');
+    popup.style.display = popup.style.display === 'block' ? 'none' : 'block';
+}
 function toggleOverlay() {
     var overlay = document.getElementById('overlay');
     overlay.style.display = overlay.style.display === 'block' ? 'none' : 'block';
+}
+function openWebsite() {
+    const url = "https://therightplace.fibery.io/Rapporten/Rapporten-489";
+    window.open(url, "_blank");
 }
 
 </script>
@@ -497,14 +509,10 @@ function toggleOverlay() {
 <body>
     <div class="proto">
         <div id="map"></div>
-        <div class="autocomplete">
-            <input id="search-place" class="search-place" type="text" placeholder="Zoomen naar adres ...">
-            <!-- Define the HTML element with the content you want in the popup -->
-        </div>
         <div id="popupContent">
             <h1 id="veldID">VeldID</h1>
             <p>Klik hier om het rapport te downloaden:</p>
-            <button id="rapport">Download Rapport</button>
+            <button id="rapport" onclick="openWebsite()">Download Rapport</button>
             <p>Klik hier om een bestelling te doen</p>
             <button id="bestel" onclick="toggleOverlay()">Bestel taakkaarten</button>
         </div>
